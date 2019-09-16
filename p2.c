@@ -19,6 +19,7 @@ int main()
 
     char prompt[5] = "%1% ";
     int wordcount = 0;
+    char *newargv[20];
 
     //any necessary set-up, including signal catcher and setpgid();
     //check for the presense of argv[1]; redirect p2's input if appropriate
@@ -35,20 +36,29 @@ int main()
         for(i = 0; i < wordcount; i++)
         {
             printf("word %d: [%s]\n", i ,words[i]);
+            newargv[i] = words[i];
         }
         if (wordcount == -1) break;
+
+        execvp(newargv[0] , newargv);
         //if (line is empty) continue;
         //handle builtins (done, cd, !!) and continue, or:
         //set up for redirection
-        //if (fork() == 0) {
+//        if (fork() == 0) {
         //  redirect I?O as requested (background children sometimes need
         //  their stdin redirected to /dev/null);
         //  use execvp() to start requested process;
+        //    execvp(newargv[0] , newargv);
+        //    if (execvp("/bin/cat" , "./p2.c") == -1)
+        //    {
+        //        perror("exec failed");
+        //        exit(9);
+        //    }
         //  if the execvp() failed {
         //      print an error message;
         //      exit(9); [choose different exit values for different errors]
         //  }
-        //}
+//        }
         //if appropriate, wait for child to complete;
         //else print the chidl's pid (and in this casek the child should
         //redirect its stdin to /dev/null [unless '<' specifies a better target]
@@ -61,10 +71,16 @@ int main()
     return 0;
 }
 
-
+/******************************************************************************
+ FUNCTION: parse
+ NOTES: Syntactic analyzer for shell. Uses getword to collect input. Words
+    collected are left in the buffer.
+ I/O: input parameters: 2d char array for storage of the collected words
+      output: # of words read.
+ *****************************************************************************/
 int parse(char words[][STORAGE])
 {
-    char s[STORAGE];
+    char s[STORAGE]; //buffer for individual word
     int c = 0;
     int wordcount = 0; // total number of words read
     for(;;)
