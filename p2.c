@@ -2,7 +2,7 @@
  NAME: Jack Bruce
  USERNAME: cssc0013
  PROJECT: CS570 Program 2
- DUE DATE: 
+ DUE DATE: 10/04/19 
  INSTRUCTOR: Dr. John Carroll
  FILE: p2.c 
  NOTES: 
@@ -13,10 +13,10 @@
 
 int c;
 char words[MAXITEM][STORAGE]; /* words collected from stdin */
+char *newargv[20];
 
 int main()
 {
-    char *newargv[20];
     char prompt[5] = "%1% ";
     int wordcount = 0, execstatus = 0, kidpid;
 
@@ -27,19 +27,10 @@ int main()
     {
         printf("%s", prompt);
         //call parse function, setting [global] flags as needed;
-        wordcount = parse(words);
+        wordcount = parse(words, newargv);
         //if (getword() returned -1 and line is empty) break
         if (wordcount == -1) break;
         if (wordcount == 0) continue; // reissue prompt if line is empty        
-        // parse check
-        int i;
-        for(i = 0; i < wordcount; i++)
-        {
-        //    printf("word %d: [%s]\n", i ,words[i]);
-            newargv[i] = words[i];
-        }
-        newargv[wordcount] = NULL;
-
         //handle builtins (done, cd, !!) and continue, or:
         //set up for redirection
         if ((kidpid = fork()) == 0) {
@@ -47,19 +38,15 @@ int main()
         //  their stdin redirected to /dev/null);
         //  use execvp() to start requested process;
             execstatus = execvp(newargv[0] , newargv);
-            if (execstatus == -1)
+            if (execstatus == -1) //if exec failed
             {
                 perror("exec failed");
-                exit(9);
+                exit(9); //use different exit codes for different errors
             }
-        //  if the execvp() failed {
-        //      print an error message;
-        //      exit(9); [choose different exit values for different errors]
-        //  }
         }
         //if appropriate, wait for child to complete;
         wait(NULL);
-        //else print the chidl's pid (and in this casek the child should
+        //else print the child's pid (and in this casek the child should
         //redirect its stdin to /dev/null [unless '<' specifies a better target]
     }
     /* Required */
@@ -77,21 +64,22 @@ int main()
  I/O: input parameters: 2d char array for storage of the collected words
       output: # of words read.
  *****************************************************************************/
-int parse(char words[][STORAGE])
+int parse(char words[][STORAGE], char **newargv)
 {
     char s[STORAGE]; //buffer for individual word
     int c = 0;
     int wordcount = 0; // total number of words read
     for(;;)
     {
-            
-        //(void) printf("n=%d, s=[%s]\n", c = getword(s), s);
         c = getword(s);
         strcpy(words[wordcount], s);
+        newargv[wordcount] = words[wordcount]; /* populate new argv with
+                                                  command and arguments */
         if (c == 0) break;
         if (wordcount == 0 && c == -1) return -1;
         wordcount++;
     }
+    newargv[wordcount] = NULL;
     return wordcount;
 }
 /*******************************[ EOF: p2.c ]*********************************/
