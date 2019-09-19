@@ -19,6 +19,10 @@
 
 typedef enum { false, true } bool;
 
+void setinput(void);
+
+void setoutput(void);
+
 int parse(char w[][STORAGE], char **newargv);
 
 /*******************************[ EOF: p2.h ]*********************************/

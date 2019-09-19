@@ -12,88 +12,50 @@
 #include "p2.h"
 
 bool redirect_out, redirect_in, redirect_out_err;
-FILE *outfile = NULL, *infile = NULL;
+FILE *outfile, *infile;
 
-int main()
+/******************************************************************************
+ FUNCTION: set input 
+ NOTES: Handles redirection of input 
+ I/O: input parameters: void 
+      output: void 
+ *****************************************************************************/
+void setinput(void)
 {
-    char words[MAXITEM][STORAGE]; /* words collected from stdin */
-    char *newargv[20];
-    char prompt[5] = "%1% ";
-    int wordcount = 0, execstatus = 0, kidpid;
-
-    //any necessary set-up, including signal catcher and setpgid();
-    //check for the presense of argv[1]; redirect p2's input if appropriate
-
-    for(;;)
+    if (redirect_in)
     {
-        outfile = NULL;
-        infile = NULL;
-        redirect_out = false;
-        redirect_in = false;
-        redirect_out_err = false;
-
-        printf("%s", prompt);
-        //call parse function, setting [global] flags as needed;
-        wordcount = parse(words, newargv);
-        //if (getword() returned -1 and line is empty) break
-        if (wordcount == -1) break;
-        if (wordcount == 0) continue; // reissue prompt if line is empty        
-        //handle builtins (done, cd, !!) and continue, or:
-        //set up for redirection
-        if ((kidpid = fork()) == 0) {
-        //  redirect I?O as requested (background children sometimes need
-            if (redirect_out)
-            {
-                if (!outfile)
-                {
-                    perror("invalid output file");
-                    exit(9); //put a proper exit status here
-                }
-                dup2(fileno(outfile), STDOUT_FILENO); /* you should check the 
-                                                         return status */
-            }
-            if (redirect_out_err)
-            {
-                if (!outfile)
-                {
-                    perror("invalid output file");
-                    exit(9); //put a proper exit status here
-                }
-                dup2(fileno(outfile), STDOUT_FILENO); /* you should check the 
-                                                         return status */
-                dup2(fileno(outfile), STDERR_FILENO);
-            }
-            if (redirect_in)
-            {
-                if (!infile)
-                {
-                    perror("invalid input file");
-                    exit(9); //put a proper exit status here
-                }
-                dup2(fileno(infile), STDIN_FILENO); /* you should check the 
-                                                         return status */
-            } else 
-                dup2(open("/dev/null", "r"), STDIN_FILENO);
-            // use execvp() to start requested process;
-            execstatus = execvp(newargv[0] , newargv);
-            if (execstatus == -1) //if exec failed
-            {
-                perror("exec failed");
-                exit(9); //use different exit codes for different errors
-            }
+        if (!infile)
+        {
+            perror("invalid input file");
+            exit(9); //put a proper exit status here
         }
-        //if appropriate, wait for child to complete;
-        wait(NULL);
-        //else print the child's pid (and in this casek the child should
-        //redirect its stdin to /dev/null [unless '<' specifies a better target]
+        dup2(fileno(infile), STDIN_FILENO); /* you should check the 
+                                               return status */
+     } else 
+        dup2(open("/dev/null", "r"), STDIN_FILENO);
+} /* End function set input */
+
+/******************************************************************************
+ FUNCTION: set output 
+ NOTES: Handles redirection of output 
+ I/O: input parameters: void 
+      output: void 
+ *****************************************************************************/
+void setoutput(void)
+{
+    if (redirect_out | redirect_out_err)
+    {
+        if (!outfile)
+        {
+            perror("invalid output file");
+            exit(9); //put a proper exit status here
+        }
+        dup2(fileno(outfile), STDOUT_FILENO); /* you should check the 
+                                                 return status */
+        if (redirect_out_err) 
+            dup2(fileno(outfile), STDERR_FILENO);
     }
-    /* Required */
-    //killpg(getpgrp(), SIGTERM);
-    //printf("p2 terminated.\n");
-    //exit(0);
-    /*************/
-    return 0;
-}
+} /* End function set output */
 
 /******************************************************************************
  FUNCTION: parse
@@ -154,5 +116,57 @@ int parse(char words[][STORAGE], char **newargv)
     }
     newargv[newargc] = NULL;
     return wordcount;
-}
+} /* End function parse */
+
+int main()
+{
+    char words[MAXITEM][STORAGE]; /* words collected from stdin */
+    char *newargv[20];
+    char prompt[5] = "%1% ";
+    int wordcount = 0, execstatus = 0, kidpid;
+
+    //any necessary set-up, including signal catcher and setpgid();
+    //check for the presense of argv[1]; redirect p2's input if appropriate
+
+    for(;;)
+    {
+        outfile = NULL;
+        infile = NULL;
+        redirect_out = false;
+        redirect_in = false;
+        redirect_out_err = false;
+
+        printf("%s", prompt);
+        //call parse function, setting [global] flags as needed;
+        wordcount = parse(words, newargv);
+        //if (getword() returned -1 and line is empty) break
+        if (wordcount == -1) break;
+        if (wordcount == 0) continue; // reissue prompt if line is empty        
+        //handle builtins (done, cd, !!) and continue, or:
+        //set up for redirection
+        if ((kidpid = fork()) == 0) {
+             //  redirect i?o as requested (background children sometimes need
+            setoutput();
+            setinput();
+            // use execvp() to start requested process;
+            execstatus = execvp(newargv[0] , newargv);
+            if (execstatus == -1) //if exec failed
+            {
+                perror("exec failed");
+                exit(9); //use different exit codes for different errors
+            }
+        }
+        //if appropriate, wait for child to complete;
+        wait(NULL);
+        //else print the child's pid (and in this casek the child should
+        //redirect its stdin to /dev/null [unless '<' specifies a better target]
+    }
+    /* Required */
+    //killpg(getpgrp(), SIGTERM);
+    //printf("p2 terminated.\n");
+    //exit(0);
+    /*************/
+    return 0;
+} /* End function main */
+
 /*******************************[ EOF: p2.c ]*********************************/
