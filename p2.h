@@ -17,6 +17,8 @@
 #include "getword.h"
 #define MAXITEM 100 /* max number of words per line */
 
+typedef enum { false, true } bool;
+
 int parse(char w[][STORAGE], char **newargv);
 
 /*******************************[ EOF: p2.h ]*********************************/
