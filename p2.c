@@ -11,7 +11,7 @@
 
 #include "p2.h"
 
-bool redirect_out = false, redirect_in = false;
+bool redirect_out, redirect_in, redirect_out_err;
 FILE *outfile = NULL, *infile = NULL;
 
 int main()
@@ -27,7 +27,10 @@ int main()
     for(;;)
     {
         outfile = NULL;
+        infile = NULL;
         redirect_out = false;
+        redirect_in = false;
+        redirect_out_err = false;
 
         printf("%s", prompt);
         //call parse function, setting [global] flags as needed;
@@ -48,6 +51,17 @@ int main()
                 }
                 dup2(fileno(outfile), STDOUT_FILENO); /* you should check the 
                                                          return status */
+            }
+            if (redirect_out_err)
+            {
+                if (!outfile)
+                {
+                    perror("invalid output file");
+                    exit(9); //put a proper exit status here
+                }
+                dup2(fileno(outfile), STDOUT_FILENO); /* you should check the 
+                                                         return status */
+                dup2(fileno(outfile), STDERR_FILENO);
             }
             if (redirect_in)
             {
@@ -107,20 +121,27 @@ int parse(char words[][STORAGE], char **newargv)
             wordcount++;
             continue;
         }
-        if(redirect_out && !strcmp(words[wordcount-1], ">"))
+        if (!strcmp(s, ">&"))
+        {
+            redirect_out_err = true;
+            wordcount++;
+            continue;
+        }
+        if (redirect_out && !strcmp(words[wordcount-1], ">")
+            || redirect_out_err && !strcmp(words[wordcount-1], ">&"))
         {
             outfile = fopen(words[wordcount++], "w");
             continue;
         }
         /*******************************/ 
         /* input redirect preparation */
-        if(!strcmp(s, "<"))
+        if (!strcmp(s, "<"))
         {
             redirect_in = true;
             wordcount++;
             continue;
         }
-        if(redirect_in && !strcmp(words[wordcount-1], "<"))
+        if (redirect_in && !strcmp(words[wordcount-1], "<"))
         {
             infile = fopen(words[wordcount++], "r");
             continue;
