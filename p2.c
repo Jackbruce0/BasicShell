@@ -46,11 +46,21 @@ int main()
                     perror("invalid output file");
                     exit(9); //put a proper exit status here
                 }
-                dup2(fileno(outfile), 1); //you should check the return status
+                dup2(fileno(outfile), STDOUT_FILENO); /* you should check the 
+                                                         return status */
             }
-        //  their stdin redirected to /dev/null);
-            //dup2(fileno("/dev/null"), 0);
-        //  use execvp() to start requested process;
+            if (redirect_in)
+            {
+                if (!infile)
+                {
+                    perror("invalid input file");
+                    exit(9); //put a proper exit status here
+                }
+                dup2(fileno(infile), STDIN_FILENO); /* you should check the 
+                                                         return status */
+            } else 
+                dup2(open("/dev/null", "r"), STDIN_FILENO);
+            // use execvp() to start requested process;
             execstatus = execvp(newargv[0] , newargv);
             if (execstatus == -1) //if exec failed
             {
@@ -89,7 +99,8 @@ int parse(char words[][STORAGE], char **newargv)
         strcpy(words[wordcount], s);
         if (c == 0) break; //end parse when \n is read
         if (wordcount == 0 && c == -1) return -1;
-
+        
+        /* output redirect preparation */
         if(!strcmp(s, ">"))
         {
             redirect_out = true;
@@ -101,6 +112,20 @@ int parse(char words[][STORAGE], char **newargv)
             outfile = fopen(words[wordcount++], "w");
             continue;
         }
+        /*******************************/ 
+        /* input redirect preparation */
+        if(!strcmp(s, "<"))
+        {
+            redirect_in = true;
+            wordcount++;
+            continue;
+        }
+        if(redirect_in && !strcmp(words[wordcount-1], "<"))
+        {
+            infile = fopen(words[wordcount++], "r");
+            continue;
+        }
+        /******************************/ 
         newargv[newargc] = words[wordcount]; /* populate new argv with
                                                 command and arguments */
         wordcount++;
