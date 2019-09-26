@@ -12,19 +12,27 @@
 #include "p2.h"
 
 bool redirect_out, redirect_in, redirect_out_err;
-FILE *outfile, *infile;
+int outfile_fd, infile_fd;
+char outfile[MAXITEM], infile[MAXITEM];
 
+/******************************************************************************
+ FUNCTION: use line 
+ NOTES: Populates current control values with the previous values stored in 
+    Line struct 
+ I/O: input parameters: Line *prev for populating values, and necessary values
+                        to populate
+      output: void 
+ *****************************************************************************/
 void useline(Line *prev, char **newargv, int *wordcount)
 {
     *newargv = *prev->newargv;
     *wordcount = prev->wordcount;
-    //*outfile = *prev->outfile;
-    //*infile = *prev->infile;
+    *infile = *prev->infile;
+    *outfile = *prev->outfile;
     redirect_out = prev->redirect_out;
     redirect_in = prev->redirect_in;
     redirect_out_err = prev->redirect_out_err;
 }
-
 
 /******************************************************************************
  FUNCTION: store line 
@@ -37,8 +45,8 @@ void storeline(Line *prev, char w[][STORAGE], char **newargv, int wordcount)
 {
     *prev->newargv = *newargv;
     prev->wordcount = wordcount;
-    //*prev->outfile = *outfile;
-    //*prev->infile = *infile;
+    *prev->infile = *infile;
+    *prev->outfile = *outfile;
     prev->redirect_out = redirect_out;
     prev->redirect_in = redirect_in; 
     prev->redirect_out_err = redirect_out_err;
@@ -56,8 +64,8 @@ void historyinit(Line *prev)
     //strcpy(prev->words[0], " ");
     prev->newargv[0] = NULL;
     prev->wordcount = 0;
-    prev->infile = NULL;
-    prev->outfile = NULL;
+    strcpy(prev->infile, " ");
+    strcpy(prev->outfile, " ");
     prev->redirect_out = false;
     prev->redirect_in = false;
     prev->redirect_out_err = false;
@@ -74,7 +82,6 @@ void change_directory(char **newargv)
 {
     if (newargv[2])
     {
-        //perror("Too many arguments");
         fprintf(stderr, "Too many arguments\n");
         return;
     }
@@ -93,15 +100,16 @@ void setinput(void)
 {
     if (redirect_in)
     {
-        if (!infile)
-        {
-            perror("invalid input file");
-            exit(9); //put a proper exit status here
-        }
-        dup2(fileno(infile), STDIN_FILENO); /* you should check the 
+        int inflags = O_RDONLY;
+        if ((infile_fd = open(infile, inflags)) < 0)
+            perror("open failed");
+    }
+    if (redirect_in && infile_fd > 0)
+    {
+        dup2(infile_fd, STDIN_FILENO); /* you should check the 
                                                return status */
      } else 
-        dup2(open("/dev/null", "r"), STDIN_FILENO);
+        dup2(open("/dev/null", O_RDONLY), STDIN_FILENO);
 } /* End function set input */
 
 /******************************************************************************
@@ -114,15 +122,18 @@ void setoutput(void)
 {
     if (redirect_out | redirect_out_err)
     {
-        if (!outfile)
+        int outflags = O_WRONLY | O_CREAT | O_EXCL;
+        if ((outfile_fd = open(outfile, outflags, S_IRUSR | S_IWUSR)) < 0)
         {
-            perror("invalid output file");
-            exit(9); //put a proper exit status here
+            perror("open failed");
         }
-        dup2(fileno(outfile), STDOUT_FILENO); /* you should check the 
+        if (outfile_fd < 0)
+            dup2(open("/dev/null", O_WRONLY), STDOUT_FILENO);
+        else
+            dup2(outfile_fd, STDOUT_FILENO); /* you should check the 
                                                  return status */
         if (redirect_out_err) 
-            dup2(fileno(outfile), STDERR_FILENO);
+            dup2(outfile_fd, STDERR_FILENO);
     }
 } /* End function set output */
 
@@ -169,7 +180,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
         if (redirect_out && !strcmp(words[wordcount-1], ">")
             || redirect_out_err && !strcmp(words[wordcount-1], ">&"))
         {
-            outfile = fopen(words[wordcount++], "w");
+            strcpy(outfile, words[wordcount++]);
             continue;
         }
         /*******************************/ 
@@ -182,7 +193,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
         }
         if (redirect_in && !strcmp(words[wordcount-1], "<"))
         {
-            infile = fopen(words[wordcount++], "r");
+            strcpy(infile, words[wordcount++]);
             continue;
         }
         /******************************/ 
@@ -212,8 +223,6 @@ int main()
 
     for(;;)
     {
-        outfile = NULL;
-        infile = NULL;
         redirect_out = false;
         redirect_in = false;
         redirect_out_err = false;
@@ -222,7 +231,7 @@ int main()
         //call parse function, setting [global] flags as needed;
         wordcount = parse(words, newargv, prev);
         //if (getword() returned -1 and line is empty) break
-        if (wordcount == -2)
+        if (wordcount == -2) //!! handling
         {
             useline(prev, newargv, &wordcount);
         }

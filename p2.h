@@ -14,6 +14,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
+#include <sys/fcntl.h>
 #include "getword.h"
 #define MAXITEM 100 /* max number of words per line */
 #define MAXARGS 20 /* max number of args for command */
@@ -34,8 +36,8 @@ typedef struct Line
     //char words[MAXITEM][STORAGE]; //not necessary?
     char *newargv[MAXARGS];
     int wordcount;
-    FILE *outfile;
-    FILE *infile;
+    char infile[MAXITEM];
+    char outfile[MAXITEM];
     bool redirect_out;
     bool redirect_in;
     bool redirect_out_err;
