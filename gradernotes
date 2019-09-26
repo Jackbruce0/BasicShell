@@ -1,0 +1,7 @@
+I wrote this code myself, but gained some inspiration from Foster on how to
+read characters from stdin.
+
+Source: getword method was adapted from Foster's getchar example in inout2.c
+        found in ~masc0000/CbyDiscovery/ch2/inout2.c
+
+Project has no known bugs.

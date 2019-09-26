@@ -16,13 +16,36 @@
 #include <sys/wait.h>
 #include "getword.h"
 #define MAXITEM 100 /* max number of words per line */
+#define MAXARGS 20 /* max number of args for command */
 
 typedef enum { false, true } bool;
+
+void change_directory(char **newargv);
 
 void setinput(void);
 
 void setoutput(void);
 
-int parse(char w[][STORAGE], char **newargv);
+/* This struct will be used for storing previous lines of input
+   It basically saves the operating state of the program
+   To be used with `!!` and `history` features */
+typedef struct Line
+{
+    //char words[MAXITEM][STORAGE]; //not necessary?
+    char *newargv[MAXARGS];
+    int wordcount;
+    FILE *outfile;
+    FILE *infile;
+    bool redirect_out;
+    bool redirect_in;
+    bool redirect_out_err;
+} Line;
 
+void historyinit(Line *prev);
+
+void storeline(Line *prev, char w[][STORAGE], char **newargv, int wordcount);
+
+void useline(Line *prev, char **newargv, int *wordcount);
+
+int parse(char w[][STORAGE], char **newargv, Line *prev);
 /*******************************[ EOF: p2.h ]*********************************/
