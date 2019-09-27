@@ -116,7 +116,7 @@ void setinput(void)
     {
         dup2(infile_fd, STDIN_FILENO); /* you should check the 
                                                return status */
-     } else 
+     } else if (background)
         dup2(open("/dev/null", O_RDONLY), STDIN_FILENO);
 } /* End function set input */
 
