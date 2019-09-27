@@ -11,7 +11,7 @@
 
 #include "p2.h"
 
-bool redirect_out, redirect_in, redirect_out_err;
+bool redirect_out, redirect_in, redirect_out_err, background;
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
 
@@ -32,6 +32,7 @@ void useline(Line *prev, char **newargv, int *wordcount)
     redirect_out = prev->redirect_out;
     redirect_in = prev->redirect_in;
     redirect_out_err = prev->redirect_out_err;
+    background = prev->background;
 }
 
 /******************************************************************************
@@ -50,6 +51,7 @@ void storeline(Line *prev, char w[][STORAGE], char **newargv, int wordcount)
     prev->redirect_out = redirect_out;
     prev->redirect_in = redirect_in; 
     prev->redirect_out_err = redirect_out_err;
+    prev->background = background;
 }
 
 /******************************************************************************
@@ -61,7 +63,6 @@ void storeline(Line *prev, char w[][STORAGE], char **newargv, int wordcount)
  *****************************************************************************/
 void historyinit(Line *prev)
 {
-    //strcpy(prev->words[0], " ");
     prev->newargv[0] = NULL;
     prev->wordcount = 0;
     strcpy(prev->infile, " ");
@@ -69,6 +70,7 @@ void historyinit(Line *prev)
     prev->redirect_out = false;
     prev->redirect_in = false;
     prev->redirect_out_err = false;
+    prev->background = false;
 }
 
 /******************************************************************************
@@ -134,7 +136,7 @@ void setoutput(void)
                                                  return status */
         if (redirect_out_err) 
             dup2(outfile_fd, STDERR_FILENO);
-    }
+    } 
 } /* End function set output */
 
 /******************************************************************************
@@ -149,19 +151,31 @@ void setoutput(void)
  *****************************************************************************/
 int parse(char words[][STORAGE], char **newargv, Line *prev)
 {
-    char s[STORAGE] = {' '}; //buffer for individual word
+    char s[STORAGE] = {' '}; /* buffer for individual word */
     int c = 0;
     int wordcount = 0, newargc = 0;
     bool prevline = false;
     for(;;)
     {
         c = getword(s);
-        if (!strcmp(s, "!!")) prevline = true; /* when `!!` is encountered
-                                                  we will use contents of last
-                                                  parse */
-        if (prevline && c > 0) continue; // do not collect any words when `!!'
+        if (!strcmp(s, "!!") && wordcount == 0) 
+            prevline = true; /* when `!!` is the first word, we will use 
+                                contents of last parse */
+        if (prevline && c > 0) continue; /* do not collect trailing words when 
+                                            `!!' was encountered */
         if (!prevline) strcpy(words[wordcount], s);
-        if (c == 0) break; //end parse when \n is read
+        if (c == 0) //\n collected
+        { 
+            /* check for last word collected being '&' */
+            if (newargc > 0 && !strcmp(newargv[newargc - 1], "&"))
+            {
+                background = true;
+                newargc--; /* decrementing counter will result in '&' not
+                              being stored and passed to child */
+                printf("This is for the background\n"); //DELETE!
+            }
+            break; /* end parse when \n is read */
+        }
         if (wordcount == 0 && c == -1) return -1;
         
         /* output redirect preparation */
@@ -203,14 +217,14 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
         newargc++;
     }
 
-    if (prevline) return -2; //return status for `!!`
+    if (prevline) return -2; /* return status for `!!` */
 
     newargv[newargc] = NULL;
     storeline(prev, words, newargv, wordcount);
     return wordcount;
 } /* End function parse */
 
-int main()
+int main(int argc, char **argv)
 {
     char words[MAXITEM][STORAGE]; /* words collected from stdin */
     char *newargv[MAXARGS]; 
@@ -219,13 +233,24 @@ int main()
     Line *prev = malloc(sizeof(Line));
     historyinit(prev);
     //any necessary set-up, including signal catcher and setpgid();
-    //check for the presense of argv[1]; redirect p2's input if appropriate
-
+    if (argv[1] != NULL) /* if valid file is present as first arg. Use that
+                            as input */
+    {
+        int inflags = O_RDONLY;
+        int commands_fd = -1;
+        if ((commands_fd = open(argv[1], inflags)) < 0)
+        {
+            perror("open failed");
+            exit(9);
+        }
+        else dup2(commands_fd, STDIN_FILENO);
+    }
     for(;;)
     {
         redirect_out = false;
         redirect_in = false;
         redirect_out_err = false;
+        background = false;
 
         printf("%s", prompt);
         //call parse function, setting [global] flags as needed;
@@ -246,7 +271,7 @@ int main()
         }
         //set up for redirection
         if ((kidpid = fork()) == 0) {
-             //  redirect i?o as requested (background children sometimes need
+            // redirect i?o as requested (background children sometimes need
             setoutput();
             setinput();
             // use execvp() to start requested process;
@@ -258,13 +283,14 @@ int main()
             }
         }
         //if appropriate, wait for child to complete;
-        wait(NULL);
+        if (background) printf("%s [%d]\n", newargv[0], kidpid);
+        else wait(NULL);
         //else print the child's pid (and in this casek the child should
         //redirect its stdin to /dev/null [unless '<' specifies a better target]
     }
     /* Required */
     //killpg(getpgrp(), SIGTERM);
-    //printf("p2 terminated.\n");
+    printf("p2 terminated.\n");
     //exit(0);
     /*************/
     return 0;

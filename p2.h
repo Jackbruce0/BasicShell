@@ -33,7 +33,6 @@ void setoutput(void);
    To be used with `!!` and `history` features */
 typedef struct Line
 {
-    //char words[MAXITEM][STORAGE]; //not necessary?
     char *newargv[MAXARGS];
     int wordcount;
     char infile[MAXITEM];
@@ -41,6 +40,7 @@ typedef struct Line
     bool redirect_out;
     bool redirect_in;
     bool redirect_out_err;
+    bool background;
 } Line;
 
 void historyinit(Line *prev);
