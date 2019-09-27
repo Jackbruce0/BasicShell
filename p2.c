@@ -15,6 +15,12 @@ bool redirect_out, redirect_in, redirect_out_err, background;
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
 
+//don't really know what to do with this, but it catches signals...
+void sighandler(int signum)
+{
+    return;
+}
+
 /******************************************************************************
  FUNCTION: use line 
  NOTES: Populates current control values with the previous values stored in 
@@ -233,6 +239,10 @@ int main(int argc, char **argv)
     Line *prev = malloc(sizeof(Line));
     historyinit(prev);
     //any necessary set-up, including signal catcher and setpgid();
+    /* SIGNAL HANDLING */
+    setpgid(0,0);
+    signal(SIGTERM, sighandler);
+    /******************/
     if (argv[1] != NULL) /* if valid file is present as first arg. Use that
                             as input */
     {
@@ -289,9 +299,9 @@ int main(int argc, char **argv)
         //redirect its stdin to /dev/null [unless '<' specifies a better target]
     }
     /* Required */
-    //killpg(getpgrp(), SIGTERM);
+    killpg(getpgrp(), SIGTERM);
     printf("p2 terminated.\n");
-    //exit(0);
+    exit(0);
     /*************/
     return 0;
 } /* End function main */

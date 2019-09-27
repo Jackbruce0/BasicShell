@@ -16,11 +16,14 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <sys/fcntl.h>
+#include <signal.h>
 #include "getword.h"
 #define MAXITEM 100 /* max number of words per line */
 #define MAXARGS 20 /* max number of args for command */
 
 typedef enum { false, true } bool;
+
+void sighandler(int signum);
 
 void change_directory(char **newargv);
 
