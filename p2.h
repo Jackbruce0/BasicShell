@@ -5,8 +5,8 @@
  DUE DATE: 10/04/19 
  INSTRUCTOR: Dr. John Carroll
  FILE: p2.h
- NOTES: 
- SOURCES:
+ NOTES: Header file for shell code in p2.c. Includes work from p0 and p1 with
+    getword.c and getword.h
  *****************************************************************************/
 
 #include <stdio.h>
@@ -44,6 +44,7 @@ typedef struct Line
     bool redirect_in;
     bool redirect_out_err;
     bool background;
+    bool error;
 } Line;
 
 void historyinit(Line *prev);

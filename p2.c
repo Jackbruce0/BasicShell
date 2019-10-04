@@ -5,8 +5,10 @@
  DUE DATE: 10/04/19 
  INSTRUCTOR: Dr. John Carroll
  FILE: p2.c 
- NOTES: 
- SOURCES:
+ NOTES: Basic shell that handles commmand execution with input/output
+    redirection, cd (change directory), and running processes in the
+    background. Uses getword function from getword.c for parsing.
+ SOURCES: See ~/Two/gradernotes
  *****************************************************************************/
 
 #include "p2.h"
@@ -16,7 +18,13 @@ prematureEOF;
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
 
-//don't really know what to do with this, but it catches signals...
+/******************************************************************************
+ FUNCTION: signal handler 
+ NOTES: Function required for use with signal command. Empty b/c we are just 
+    avoid default behavior for SIGTERM signal
+ I/O: input parameters: value for SIGTERM
+      output: void 
+ *****************************************************************************/
 void sighandler(int signum)
 {
     return;
@@ -40,7 +48,7 @@ void useline(Line *prev, char **newargv, int *wordcount)
     redirect_in = prev->redirect_in;
     redirect_out_err = prev->redirect_out_err;
     background = prev->background;
-    //add new error variable
+    error = prev->error;
 }
 
 /******************************************************************************
@@ -60,7 +68,7 @@ void storeline(Line *prev, char w[][STORAGE], char **newargv, int wordcount)
     prev->redirect_in = redirect_in; 
     prev->redirect_out_err = redirect_out_err;
     prev->background = background;
-    //add new error variable
+    prev->error = error;
 }
 
 /******************************************************************************
@@ -80,7 +88,7 @@ void historyinit(Line *prev)
     prev->redirect_in = false;
     prev->redirect_out_err = false;
     prev->background = false;
-    //add new error variable
+    prev->error = false;
 }
 
 /******************************************************************************
@@ -115,16 +123,17 @@ void setinput(void)
         int inflags = O_RDONLY;
         if ((infile_fd = open(infile, inflags)) < 0)
         {
+            /* File must exist in order to be read as input */
             fprintf(stderr, "%s: No such file or directory.\n", infile);
             dup2(open("/dev/null", O_RDONLY), STDIN_FILENO);
         }
     }
     if (redirect_in && infile_fd > 0)
     {
-        dup2(infile_fd, STDIN_FILENO); /* you should check the 
-                                               return status */
-     } else if (background)
-        dup2(open("/dev/null", O_RDONLY), STDIN_FILENO);
+        dup2(infile_fd, STDIN_FILENO);
+    } else if (background)
+        dup2(open("/dev/null", O_RDONLY), STDIN_FILENO); /* bg processes can not
+                                                            compete for input */
 } /* End function set input */
 
 /******************************************************************************
@@ -140,13 +149,13 @@ void setoutput(void)
         int outflags = O_WRONLY | O_CREAT | O_EXCL;
         if ((outfile_fd = open(outfile, outflags, S_IRUSR | S_IWUSR)) < 0)
         {
-            //perror("open failed");
+            /* File cannot exist previously to be written to
+               (no clobber implementation) */
             fprintf(stderr, "%s: File exists.\n", outfile);
             dup2(open("/dev/null", O_WRONLY), STDOUT_FILENO);
         }
         else
-            dup2(outfile_fd, STDOUT_FILENO); /* you should check the 
-                                                 return status */
+            dup2(outfile_fd, STDOUT_FILENO); 
         if (redirect_out_err) 
             dup2(outfile_fd, STDERR_FILENO);
     } 
@@ -157,7 +166,6 @@ void setoutput(void)
  NOTES: Syntactic analyzer for shell. Uses getword to collect input. Words
     collected are left in the buffer.
     return value codex:
-        -3 -> error
         -2 -> !! (repeat last command)
         -1 -> done (exit shell)
  I/O: input parameters: 2d char array for storage of the collected words
@@ -178,7 +186,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
         if (prevline && c > 0) continue; /* do not collect trailing words when 
                                             `!!' was encountered */
         if (!prevline) strcpy(words[wordcount], s);
-        if (c == 0) //\n collected
+        if (c == 0) /* \n collected */
         { 
             /* check for last word collected being '&' */
             if (newargc > 0 && !strcmp(newargv[newargc - 1], "&"))
@@ -192,7 +200,9 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
         if (wordcount == 0 && c == -1) return -1;
         if (wordcount != 0 && c == -1 && strcmp(s, "done"))
         {
-            prematureEOF = true;
+            /* A premature EOF should still execute command that was entered
+               prior */
+        //    prematureEOF = true;
             break;
         }
         
@@ -263,15 +273,14 @@ int main(int argc, char **argv)
     char prompt[5] = "%1% ";
     int wordcount = 0, execstatus = 0, kidpid;
     Line *prev = malloc(sizeof(Line));
-    prematureEOF = false;
+//    prematureEOF = false;
     historyinit(prev);
-    //any necessary set-up, including signal catcher and setpgid();
     /* SIGNAL HANDLING */
     setpgid(0,0);
     (void) signal(SIGTERM, sighandler);
-    /******************/
+    /*******************/
     if (argv[1] != NULL) /* if valid file is present as first arg. Use that
-                            as input */
+                            as input (extra args are ignored, no error) */
     {
         int inflags = O_RDONLY;
         int commands_fd = -1;
@@ -288,35 +297,32 @@ int main(int argc, char **argv)
         redirect_in = false;
         redirect_out_err = false;
         background = false;
+        //prematureEOF = false;
         error = false;
 
         printf("%s", prompt);
-        //call parse function, setting [global] flags as needed;
+        /* parse stdin, setting [global] flags as needed */
         wordcount = parse(words, newargv, prev);
-        //if (getword() returned -1 and line is empty) break
-        if (wordcount == -2) //!! handling
+        if (wordcount == -2) /* handle !! built-in, use prev line */
         {
             useline(prev, newargv, &wordcount);
         }
         if (wordcount == -1) break;
-        if (wordcount == 0) continue; // reissue prompt if line is empty        
-        //handle builtins (done, cd, !!) and continue, or:
-
+        if (wordcount == 0) continue; /* reissue prompt if line is empty */
         if (error) continue;
-
-        if (!strcmp("cd", newargv[0]))
+        if (!strcmp("cd", newargv[0])) /* handle cd built-in */
         {
             change_directory(newargv);         
             continue;
         }
-        //set up for redirection
         if ((kidpid = fork()) == 0) {
-            // redirect i?o as requested (background children sometimes need
+            /* redirect I/O as requested */
             setoutput();
             setinput();
-            // use execvp() to start requested process;
+            /*****************************/
+            /* start requested process */
             execstatus = execvp(newargv[0] , newargv);
-            if (execstatus == -1) //if exec failed
+            if (execstatus == -1) /* exec failure case */
             {
                 perror("exec failed");
                 exit(9); //use different exit codes for different errors
@@ -326,9 +332,9 @@ int main(int argc, char **argv)
             if (infile_fd > 0)
                 close(infile_fd);
         }
-        //if appropriate, wait for child to complete;
+        /* print pid of child if bg process, otherwise wait for child process
+           to complete */
         if (background) printf("%s [%d]\n", newargv[0], kidpid);
-        //else print the child's pid (and in this casek the child should
         else
         {
             for (;;)
@@ -339,13 +345,15 @@ int main(int argc, char **argv)
             }
         }
 
-        if (prematureEOF)
+        /*if (prematureEOF)
         {
-            printf("%s", prompt); //This is sloppy, but it makes output match
-            break;
-        }
+            //printf("%s", prompt); //This is sloppy, but it makes output match
+            //break;
+            continue;
+        }*/
     }
-    /* Required */
+    /* Terminate any children that are still runnin.
+       Last 3 lines are used from program2 instruction verbatim */
     killpg(getpgrp(), SIGTERM);
     printf("p2 terminated.\n");
     exit(0);
