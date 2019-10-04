@@ -11,7 +11,8 @@
 
 #include "p2.h"
 
-bool redirect_out, redirect_in, redirect_out_err, background;
+bool redirect_out, redirect_in, redirect_out_err, background, error,
+prematureEOF;
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
 
@@ -39,6 +40,7 @@ void useline(Line *prev, char **newargv, int *wordcount)
     redirect_in = prev->redirect_in;
     redirect_out_err = prev->redirect_out_err;
     background = prev->background;
+    //add new error variable
 }
 
 /******************************************************************************
@@ -58,6 +60,7 @@ void storeline(Line *prev, char w[][STORAGE], char **newargv, int wordcount)
     prev->redirect_in = redirect_in; 
     prev->redirect_out_err = redirect_out_err;
     prev->background = background;
+    //add new error variable
 }
 
 /******************************************************************************
@@ -77,6 +80,7 @@ void historyinit(Line *prev)
     prev->redirect_in = false;
     prev->redirect_out_err = false;
     prev->background = false;
+    //add new error variable
 }
 
 /******************************************************************************
@@ -110,7 +114,10 @@ void setinput(void)
     {
         int inflags = O_RDONLY;
         if ((infile_fd = open(infile, inflags)) < 0)
-            perror("open failed");
+        {
+            fprintf(stderr, "%s: No such file or directory.\n", infile);
+            dup2(open("/dev/null", O_RDONLY), STDIN_FILENO);
+        }
     }
     if (redirect_in && infile_fd > 0)
     {
@@ -133,10 +140,10 @@ void setoutput(void)
         int outflags = O_WRONLY | O_CREAT | O_EXCL;
         if ((outfile_fd = open(outfile, outflags, S_IRUSR | S_IWUSR)) < 0)
         {
-            perror("open failed");
-        }
-        if (outfile_fd < 0)
+            //perror("open failed");
+            fprintf(stderr, "%s: File exists.\n", outfile);
             dup2(open("/dev/null", O_WRONLY), STDOUT_FILENO);
+        }
         else
             dup2(outfile_fd, STDOUT_FILENO); /* you should check the 
                                                  return status */
@@ -150,6 +157,7 @@ void setoutput(void)
  NOTES: Syntactic analyzer for shell. Uses getword to collect input. Words
     collected are left in the buffer.
     return value codex:
+        -3 -> error
         -2 -> !! (repeat last command)
         -1 -> done (exit shell)
  I/O: input parameters: 2d char array for storage of the collected words
@@ -157,7 +165,7 @@ void setoutput(void)
  *****************************************************************************/
 int parse(char words[][STORAGE], char **newargv, Line *prev)
 {
-    char s[STORAGE] = {' '}; /* buffer for individual word */
+    char s[STORAGE]; /* buffer for individual word */
     int c = 0;
     int wordcount = 0, newargc = 0;
     bool prevline = false;
@@ -178,25 +186,32 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
                 background = true;
                 newargc--; /* decrementing counter will result in '&' not
                               being stored and passed to child */
-                printf("This is for the background\n"); //DELETE!
             }
             break; /* end parse when \n is read */
         }
         if (wordcount == 0 && c == -1) return -1;
+        if (wordcount != 0 && c == -1 && strcmp(s, "done"))
+        {
+            prematureEOF = true;
+            break;
+        }
         
         /* output redirect preparation */
-        if(!strcmp(s, ">"))
+        if(!strcmp(s, ">") || !strcmp(s, ">&"))
         {
-            redirect_out = true;
+            if (redirect_out || redirect_out_err) /* cannot have multiple '>' 
+                                                     or '>&' in one statement */
+            {
+                fprintf(stderr, "Syntax error: Cannot redirect output to \
+multiple files.\n");
+                error = true;
+            }
+            else if (!strcmp(s, ">")) redirect_out = true;
+            else redirect_out_err = true;
             wordcount++;
             continue;
         }
-        if (!strcmp(s, ">&"))
-        {
-            redirect_out_err = true;
-            wordcount++;
-            continue;
-        }
+        /* any word following '>' or '>&' will be accepted as a file name */
         if (redirect_out && !strcmp(words[wordcount-1], ">")
             || redirect_out_err && !strcmp(words[wordcount-1], ">&"))
         {
@@ -207,10 +222,16 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
         /* input redirect preparation */
         if (!strcmp(s, "<"))
         {
-            redirect_in = true;
+            if (redirect_in) /* cannot have multiple '<' in one statement */
+            {
+                fprintf(stderr, "Syntax error: Cannot accept input from \
+multiple files.\n");
+                error = true;
+            } else redirect_in = true;
             wordcount++;
             continue;
         }
+        /* any word following '<' will be accepted as a file name */
         if (redirect_in && !strcmp(words[wordcount-1], "<"))
         {
             strcpy(infile, words[wordcount++]);
@@ -227,6 +248,11 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
 
     newargv[newargc] = NULL;
     storeline(prev, words, newargv, wordcount);
+    if (newargv[0] == NULL && wordcount > 0) /* If there is no command */
+    {
+        fprintf(stderr, "Syntax error: No command given.\n");
+        error = true;
+    }
     return wordcount;
 } /* End function parse */
 
@@ -237,11 +263,12 @@ int main(int argc, char **argv)
     char prompt[5] = "%1% ";
     int wordcount = 0, execstatus = 0, kidpid;
     Line *prev = malloc(sizeof(Line));
+    prematureEOF = false;
     historyinit(prev);
     //any necessary set-up, including signal catcher and setpgid();
     /* SIGNAL HANDLING */
     setpgid(0,0);
-    signal(SIGTERM, sighandler);
+    (void) signal(SIGTERM, sighandler);
     /******************/
     if (argv[1] != NULL) /* if valid file is present as first arg. Use that
                             as input */
@@ -261,6 +288,7 @@ int main(int argc, char **argv)
         redirect_in = false;
         redirect_out_err = false;
         background = false;
+        error = false;
 
         printf("%s", prompt);
         //call parse function, setting [global] flags as needed;
@@ -273,6 +301,8 @@ int main(int argc, char **argv)
         if (wordcount == -1) break;
         if (wordcount == 0) continue; // reissue prompt if line is empty        
         //handle builtins (done, cd, !!) and continue, or:
+
+        if (error) continue;
 
         if (!strcmp("cd", newargv[0]))
         {
@@ -291,19 +321,35 @@ int main(int argc, char **argv)
                 perror("exec failed");
                 exit(9); //use different exit codes for different errors
             }
+            if (outfile_fd > 0)
+                close(outfile_fd);
+            if (infile_fd > 0)
+                close(infile_fd);
         }
         //if appropriate, wait for child to complete;
         if (background) printf("%s [%d]\n", newargv[0], kidpid);
-        else wait(NULL);
         //else print the child's pid (and in this casek the child should
-        //redirect its stdin to /dev/null [unless '<' specifies a better target]
+        else
+        {
+            for (;;)
+            {
+                pid_t pid;
+                pid = wait(NULL);
+                if (pid == kidpid) break;
+            }
+        }
+
+        if (prematureEOF)
+        {
+            printf("%s", prompt); //This is sloppy, but it makes output match
+            break;
+        }
     }
     /* Required */
     killpg(getpgrp(), SIGTERM);
     printf("p2 terminated.\n");
     exit(0);
     /*************/
-    return 0;
 } /* End function main */
 
 /*******************************[ EOF: p2.c ]*********************************/

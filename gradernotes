@@ -1,7 +1,30 @@
-I wrote this code myself, but gained some inspiration from Foster on how to
-read characters from stdin.
+I wrote this code myself, but gained some inspiration from several sources.
 
-Source: getword method was adapted from Foster's getchar example in inout2.c
-        found in ~masc0000/CbyDiscovery/ch2/inout2.c
+Sources: - getword method was adapted from Foster's getchar example in inout2.c
+           found in ~masc0000/CbyDiscovery/ch2/inout2.c
+         - syntax and usage of execvp commmand was learned from exec1.c found
+           in ~cs570/exec1.c
+         - syntax and usage of fork command was learned from fork1.c found in 
+           ~cs570/fork1.c
+         - syntax and usage of getpid was learned from fork2.c found in
+           ~cs570/fork2.c
+         - loop for reaping child process was adapted from lines 97-102 of
+           pipe.c found in ~cs570/pipe.c
+         - syntax and usage of dup2 was learned from dup2.c found in
+           ~cs570/dup2.c
+         - use of signals and a signal handler was learned from sig.c and 
+           sighandler.c found in ~cs570/sig.c and ~cs570/sighandler.c
+         - template for main method and parse was also followed from program 2
+           instructions
+
+Design decisions:
+         - `[command] [>|<|>&] &` will write/read from/to a file named '&' if it
+           meets standards for a valid file
+            + as opposed to putting the command in the background with a 
+              redirect pointing to an empty file
+         - for `!!` I implemented a struct that saves the state of p2 and will
+           load that previous state when `!!` is encountered
+            + the use of a struct will make my life much easier when 
+              implementing `history` in p4
 
 Project has no known bugs.
