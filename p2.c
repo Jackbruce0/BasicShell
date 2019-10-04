@@ -13,8 +13,7 @@
 
 #include "p2.h"
 
-bool redirect_out, redirect_in, redirect_out_err, background, error,
-prematureEOF;
+bool redirect_out, redirect_in, redirect_out_err, background, error;
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
 
@@ -202,7 +201,6 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
         {
             /* A premature EOF should still execute command that was entered
                prior */
-        //    prematureEOF = true;
             break;
         }
         
@@ -273,7 +271,6 @@ int main(int argc, char **argv)
     char prompt[5] = "%1% ";
     int wordcount = 0, execstatus = 0, kidpid;
     Line *prev = malloc(sizeof(Line));
-//    prematureEOF = false;
     historyinit(prev);
     /* SIGNAL HANDLING */
     setpgid(0,0);
@@ -297,7 +294,6 @@ int main(int argc, char **argv)
         redirect_in = false;
         redirect_out_err = false;
         background = false;
-        //prematureEOF = false;
         error = false;
 
         printf("%s", prompt);
@@ -344,13 +340,6 @@ int main(int argc, char **argv)
                 if (pid == kidpid) break;
             }
         }
-
-        /*if (prematureEOF)
-        {
-            //printf("%s", prompt); //This is sloppy, but it makes output match
-            //break;
-            continue;
-        }*/
     }
     /* Terminate any children that are still runnin.
        Last 3 lines are used from program2 instruction verbatim */
