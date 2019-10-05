@@ -8,7 +8,7 @@ Sources: - getword method was adapted from Foster's getchar example in inout2.c
            ~cs570/fork1.c
          - syntax and usage of getpid was learned from fork2.c found in
            ~cs570/fork2.c
-         - loop for reaping child process was adapted from lines 97-102 of
+         - loop for reaping child processes was adapted from lines 97-102 of
            pipe.c found in ~cs570/pipe.c
          - syntax and usage of dup2 was learned from dup2.c found in
            ~cs570/dup2.c
@@ -16,8 +16,15 @@ Sources: - getword method was adapted from Foster's getchar example in inout2.c
            sighandler.c found in ~cs570/sig.c and ~cs570/sighandler.c
          - template for main method and parse was also followed from program 2
            instructions
+         - http://www.tldp.org/LDP/abs/html/exitcodes.html for reserved exit 
+           codes
+         - https://www.geeksforgeeks.org/error-handling-c-programs/ for
+           learning how to use 'errno' variable
+         - man pages for dup2, execvp, getenv, chdir, exit, fork, open, perror,
+           wait, stat, fflush, access, sigaction, signal, setpgid, getpgrp,
+           and killpg
 
-Design decisions:
+Design Decisions:
          - `[command] [>|<|>&] &` will write/read from/to a file named '&' if it
            meets standards for a valid file
             + as opposed to putting the command in the background with a 
@@ -26,5 +33,13 @@ Design decisions:
            load that previous state when `!!` is encountered
             + the use of a struct will make my life much easier when 
               implementing `history` in p4
+         - handled error exit codes with errno variable
 
-Project has no known bugs.
+Known Deficiencies:
+         - when a background process has printed output, it will print after the
+           parent issued the prompt and the parent will not issue another
+           prompt on a seperate line like tcsh does
+            + performance is not hindered, shell is still activitely waiting
+              for input
+         - `make splint` prints unrecognized identifier warning for killpg. I
+            could not figure out how to make this go away

@@ -19,8 +19,8 @@ char outfile[MAXITEM], infile[MAXITEM];
 
 /******************************************************************************
  FUNCTION: signal handler 
- NOTES: Function required for use with signal command. Empty b/c we are just 
-    avoid default behavior for SIGTERM signal
+ NOTES: Function required for use with signal command. Empty b/c we just want
+    to avoid default behavior for SIGTERM signal
  I/O: input parameters: value for SIGTERM
       output: void 
  *****************************************************************************/
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
         if ((commands_fd = open(argv[1], inflags)) < 0)
         {
             perror("open failed");
-            exit(9);
+            exit(errno); /* errno was set last call to open */
         }
         else dup2(commands_fd, STDIN_FILENO);
     }
@@ -315,18 +315,20 @@ int main(int argc, char **argv)
             /* redirect I/O as requested */
             setoutput();
             setinput();
-            /*****************************/
             /* start requested process */
             execstatus = execvp(newargv[0] , newargv);
             if (execstatus == -1) /* exec failure case */
             {
                 perror("exec failed");
-                exit(9); //use different exit codes for different errors
+                exit(errno); /* errno was set in last call to execvp */
             }
+            /* close all open files */
             if (outfile_fd > 0)
                 close(outfile_fd);
             if (infile_fd > 0)
                 close(infile_fd);
+            /* flush all open output streams */
+            fflush(NULL);
         }
         /* print pid of child if bg process, otherwise wait for child process
            to complete */
