@@ -123,8 +123,10 @@ void setinput(void)
         if ((infile_fd = open(infile, inflags)) < 0)
         {
             /* File must exist in order to be read as input */
-            fprintf(stderr, "%s: No such file or directory.\n", infile);
+            if (infile[0] == '\0') fprintf(stderr, "Missing name for redirect\n");
+            else fprintf(stderr, "%s: No such file or directory.\n", infile);
             dup2(open("/dev/null", O_RDONLY), STDIN_FILENO);
+            error = true;
         }
     }
     if (redirect_in && infile_fd > 0)
@@ -150,8 +152,10 @@ void setoutput(void)
         {
             /* File cannot exist previously to be written to
                (no clobber implementation) */
-            fprintf(stderr, "%s: File exists.\n", outfile);
+            if (outfile[0] == '\0') fprintf(stderr, "Missing name for redirect\n");
+            else fprintf(stderr, "%s: file exists.\n", outfile);
             dup2(open("/dev/null", O_WRONLY), STDOUT_FILENO);
+            error = true;
         }
         else
             dup2(outfile_fd, STDOUT_FILENO); 
@@ -168,7 +172,8 @@ void setoutput(void)
         -2 -> !! (repeat last command)
         -1 -> done (exit shell)
  I/O: input parameters: 2d char array for storage of the collected words
-      output: # of words read.
+                        ptr to newargv array, ptr to struct for previous line 
+      output: # of words read or exit code from above
  *****************************************************************************/
 int parse(char words[][STORAGE], char **newargv, Line *prev)
 {
@@ -283,7 +288,7 @@ int main(int argc, char **argv)
         int commands_fd = -1;
         if ((commands_fd = open(argv[1], inflags)) < 0)
         {
-            perror("open failed");
+            fprintf(stderr, "%s: %s\n", argv[1], strerror(errno));
             exit(errno); /* errno was set last call to open */
         }
         else dup2(commands_fd, STDIN_FILENO);
@@ -295,6 +300,8 @@ int main(int argc, char **argv)
         redirect_out_err = false;
         background = false;
         error = false;
+        outfile[0] = '\0';
+        infile[0] = '\0';
 
         printf("%s", prompt);
         /* parse stdin, setting [global] flags as needed */
@@ -311,6 +318,8 @@ int main(int argc, char **argv)
             change_directory(newargv);         
             continue;
         }
+        /* flush all open output streams */
+        fflush(NULL);
         if ((kidpid = fork()) == 0) {
             /* redirect I/O as requested */
             setoutput();
@@ -319,7 +328,9 @@ int main(int argc, char **argv)
             execstatus = execvp(newargv[0] , newargv);
             if (execstatus == -1) /* exec failure case */
             {
-                perror("exec failed");
+                //perror("exec failed");
+                fprintf(stderr, "%s: Command not found or failed to execute.\n", 
+                    newargv[0]);
                 exit(errno); /* errno was set in last call to execvp */
             }
             /* close all open files */
@@ -327,8 +338,7 @@ int main(int argc, char **argv)
                 close(outfile_fd);
             if (infile_fd > 0)
                 close(infile_fd);
-            /* flush all open output streams */
-            fflush(NULL);
+            
         }
         /* print pid of child if bg process, otherwise wait for child process
            to complete */
@@ -343,8 +353,8 @@ int main(int argc, char **argv)
             }
         }
     }
-    /* Terminate any children that are still runnin.
-       Last 3 lines are used from program2 instruction verbatim */
+    /* Terminate any children that are still running.
+       Last 3 lines are used from program2 instructions verbatim */
     killpg(getpgrp(), SIGTERM);
     printf("p2 terminated.\n");
     exit(0);
