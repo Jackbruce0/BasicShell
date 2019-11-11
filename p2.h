@@ -21,6 +21,7 @@
 #include "getword.h"
 #define MAXITEM 100 /* max number of words per line */
 #define MAXARGS 20 /* max number of args for command */
+#define HISTLEN 10 /* length of history */
 
 typedef enum { false, true } bool;
 
@@ -50,7 +51,7 @@ typedef struct Line
 
 void historyinit(Line *prev);
 
-void storeline(Line *prev, char w[][STORAGE], char **newargv, int wordcount);
+void storeline(Line *prev, char **newargv, int wordcount);
 
 void useline(Line *prev, char **newargv, int *wordcount);
 

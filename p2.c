@@ -16,6 +16,8 @@
 bool redirect_out, redirect_in, redirect_out_err, background, error;
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
+Line *history[HISTLEN + 1] = { 0 }; /* xtra slot will be used for !! when
+                                       # of commands exceeds 10 */
 
 /******************************************************************************
  FUNCTION: signal handler 
@@ -57,7 +59,7 @@ void useline(Line *prev, char **newargv, int *wordcount)
                         from parse  
       output: void 
  *****************************************************************************/
-void storeline(Line *prev, char w[][STORAGE], char **newargv, int wordcount)
+void storeline(Line *prev, char **newargv, int wordcount)
 {
     *prev->newargv = *newargv;
     prev->wordcount = wordcount;
@@ -88,6 +90,8 @@ void historyinit(Line *prev)
     prev->redirect_out_err = false;
     prev->background = false;
     prev->error = false;
+    /*Line tmp = { .newargv[0] = NULL, .wordcount = 0, .infile = NULL, .outfile = NULL, .redirect_out = false, .redirect_in = false, .redirect_out_err = false, .background = false, .error = false};
+    prev = &tmp;*/
 }
 
 /******************************************************************************
@@ -260,7 +264,7 @@ multiple files.\n");
     if (prevline) return -2; /* return status for `!!` */
 
     newargv[newargc] = NULL;
-    storeline(prev, words, newargv, wordcount);
+    storeline(prev, newargv, wordcount);
     if (newargv[0] == NULL && wordcount > 0) /* If there is no command */
     {
         fprintf(stderr, "Syntax error: No command given.\n");
@@ -274,9 +278,10 @@ int main(int argc, char **argv)
     char words[MAXITEM][STORAGE]; /* words collected from stdin */
     char *newargv[MAXARGS]; 
     char prompt[5] = "%1% ";
-    int wordcount = 0, execstatus = 0, kidpid;
-    Line *prev = malloc(sizeof(Line));
-    historyinit(prev);
+    int wordcount = 0, execstatus = 0, kidpid, com_count = 0;
+    Line tmp;
+    history[0] = &tmp;
+    historyinit(history[com_count]);
     /* SIGNAL HANDLING */
     setpgid(0,0);
     (void) signal(SIGTERM, sighandler);
@@ -305,10 +310,10 @@ int main(int argc, char **argv)
 
         printf("%s", prompt);
         /* parse stdin, setting [global] flags as needed */
-        wordcount = parse(words, newargv, prev);
+        wordcount = parse(words, newargv, history[com_count]);
         if (wordcount == -2) /* handle !! built-in, use prev line */
         {
-            useline(prev, newargv, &wordcount);
+            useline(history[0], newargv, &wordcount);
         }
         if (wordcount == -1) break;
         if (wordcount == 0) continue; /* reissue prompt if line is empty */
@@ -334,6 +339,7 @@ int main(int argc, char **argv)
                 exit(errno); /* errno was set in last call to execvp */
             }
             /* close all open files */
+            /* THESE LINES ARE NEVER EXECUTED :) */
             if (outfile_fd > 0)
                 close(outfile_fd);
             if (infile_fd > 0)
