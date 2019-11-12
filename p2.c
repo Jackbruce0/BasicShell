@@ -17,7 +17,8 @@ bool redirect_out, redirect_in, redirect_out_err, background, error;
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
 Line *history[HISTLEN + 1] = { 0 }; /* xtra slot will be used for !! when
-                                       # of commands exceeds 10 */
+                                       # of commands exceeds 10 
+                                       THIS DOES NOT NEED TO BE GLOBAL...*/
 
 /******************************************************************************
  FUNCTION: signal handler 
@@ -61,6 +62,7 @@ void useline(Line *prev, char **newargv, int *wordcount)
  *****************************************************************************/
 void storeline(Line *prev, char **newargv, int wordcount)
 {
+    /* I think this is the problem. only one newargv ever */
     *prev->newargv = *newargv;
     prev->wordcount = wordcount;
     *prev->infile = *infile;
@@ -90,8 +92,6 @@ void historyinit(Line *prev)
     prev->redirect_out_err = false;
     prev->background = false;
     prev->error = false;
-    /*Line tmp = { .newargv[0] = NULL, .wordcount = 0, .infile = NULL, .outfile = NULL, .redirect_out = false, .redirect_in = false, .redirect_out_err = false, .background = false, .error = false};
-    prev = &tmp;*/
 }
 
 /******************************************************************************
@@ -173,6 +173,9 @@ void setoutput(void)
  NOTES: Syntactic analyzer for shell. Uses getword to collect input. Words
     collected are left in the buffer.
     return value codex:
+        -11-(-19) -> !# (where # = a digit that denotes a prev command)
+            + The absolute value of this number - 10 will be the index in
+              our history table for the command to be executed
         -2 -> !! (repeat last command)
         -1 -> done (exit shell)
  I/O: input parameters: 2d char array for storage of the collected words
@@ -184,16 +187,19 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
     char s[STORAGE]; /* buffer for individual word */
     int c = 0;
     int wordcount = 0, newargc = 0;
-    bool prevline = false;
+    bool bang = false; /* flag for all 2 char commands that begin w/ '!' */
+    char bang_buf[3] = "\0"; /* buffer for chars considered for '!' command */
     for(;;)
     {
         c = getword(s);
-        if (!strcmp(s, "!!") && wordcount == 0) 
-            prevline = true; /* when `!!` is the first word, we will use 
+        if (!strncmp(s, "!", 1) && wordcount == 0 && strlen(s) == 2) {
+            bang = true; /* when `!*` is the first word, we will use 
                                 contents of last parse */
-        if (prevline && c > 0) continue; /* do not collect trailing words when 
-                                            `!!' was encountered */
-        if (!prevline) strcpy(words[wordcount], s);
+            strncpy(bang_buf, s, 3);
+        }
+        if (bang && c > 0) continue; /* do not collect trailing words when 
+                                            `!*` was encountered */
+        if (!bang) strcpy(words[wordcount], s);
         if (c == 0) /* \n collected */
         { 
             /* check for last word collected being '&' */
@@ -260,8 +266,19 @@ multiple files.\n");
         wordcount++;
         newargc++;
     }
-
-    if (prevline) return -2; /* return status for `!!` */
+    fflush(NULL); /* Clear words that weren't parsed  */
+    if (bang) 
+    {
+        /* something about !$ will be in here too i guess */
+        if (!strcmp(bang_buf, "!!")) return -2; /* return status for `!*` */
+        int i;
+        char cmp[3]; /* string used for command comparison */
+        for (i = 1; i < 10; i++) 
+        {
+            sprintf(cmp, "!%d", i);
+            if (!strncmp(bang_buf, cmp, 2)) return -10 - i;
+        }
+    }
 
     newargv[newargc] = NULL;
     storeline(prev, newargv, wordcount);
@@ -277,11 +294,14 @@ int main(int argc, char **argv)
 {
     char words[MAXITEM][STORAGE]; /* words collected from stdin */
     char *newargv[MAXARGS]; 
-    char prompt[5] = "%1% ";
+    char prompt[6];
     int wordcount = 0, execstatus = 0, kidpid, com_count = 0;
-    Line tmp;
-    history[0] = &tmp;
+    /* initialize next entry in history array */
+    /* Will have issues in blank line case */
+    Line tmp[HISTLEN];
+    history[com_count] = &tmp[com_count];
     historyinit(history[com_count]);
+    /******************************************/
     /* SIGNAL HANDLING */
     setpgid(0,0);
     (void) signal(SIGTERM, sighandler);
@@ -308,18 +328,42 @@ int main(int argc, char **argv)
         outfile[0] = '\0';
         infile[0] = '\0';
 
+        sprintf(prompt, "%%%d%% ",com_count + 1);
         printf("%s", prompt);
         /* parse stdin, setting [global] flags as needed */
         wordcount = parse(words, newargv, history[com_count]);
-        if (wordcount == -2) /* handle !! built-in, use prev line */
+        if (wordcount < -10 && wordcount > -20) 
         {
-            useline(history[0], newargv, &wordcount);
+            printf("%d\n", wordcount);
+            int index = abs(wordcount) - 10 - 1; /* -1 for 0-8 indexing */
+            printf("%d\n", index);
+            useline(history[index],newargv, &wordcount); /* for some reason
+                                                            every command is the same :( */
+
+                /*Copy this line's pointer to next slot as well to account
+                 * for hole in history table*/
+            history[com_count] = history[index];
         }
-        if (wordcount == -1) break;
-        if (wordcount == 0) continue; /* reissue prompt if line is empty */
+        else if (wordcount == -2) /* handle !* built-in, use prev line */
+        {
+            if (com_count == 0) /* 1st command ever */
+                useline(history[0], newargv, &wordcount);
+            else
+                useline(history[com_count-1], newargv, &wordcount);
+
+                /*Copy previous pointer to next slot as well to account
+                 * for hole in history table*/
+                history[com_count] = history[com_count-1];
+        }
+        else if (wordcount == -1) break;
+        else if (wordcount == 0) {
+            continue; /* reissue prompt if line is empty */
+        }
         if (error) continue;
+        com_count++; /* com_count is not incremented for empty lines or errors */
         if (!strcmp("cd", newargv[0])) /* handle cd built-in */
         {
+            /* how do we get this in history? */
             change_directory(newargv);         
             continue;
         }
@@ -333,11 +377,11 @@ int main(int argc, char **argv)
             execstatus = execvp(newargv[0] , newargv);
             if (execstatus == -1) /* exec failure case */
             {
-                //perror("exec failed");
                 fprintf(stderr, "%s: Command not found or failed to execute.\n", 
                     newargv[0]);
                 exit(errno); /* errno was set in last call to execvp */
             }
+
             /* close all open files */
             /* THESE LINES ARE NEVER EXECUTED :) */
             if (outfile_fd > 0)
@@ -358,6 +402,11 @@ int main(int argc, char **argv)
                 if (pid == kidpid) break;
             }
         }
+        
+        /* Initialize next entry in history */
+        history[com_count] = &tmp[com_count];
+        historyinit(history[com_count]);
+
     }
     /* Terminate any children that are still running.
        Last 3 lines are used from program2 instructions verbatim */
@@ -365,6 +414,7 @@ int main(int argc, char **argv)
     printf("p2 terminated.\n");
     exit(0);
     /*************/
+
 } /* End function main */
 
 /*******************************[ EOF: p2.c ]*********************************/
