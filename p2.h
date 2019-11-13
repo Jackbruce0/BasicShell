@@ -1,8 +1,8 @@
 /******************************************************************************
  NAME: Jack Bruce
  USERNAME: cssc0013
- PROJECT: CS570 Program 2
- DUE DATE: 10/04/19 
+ PROJECT: CS570 Program 4
+ DUE DATE: 11/29/19 
  INSTRUCTOR: Dr. John Carroll
  FILE: p2.h
  NOTES: Header file for shell code in p2.c. Includes work from p0 and p1 with
@@ -38,7 +38,8 @@ void setoutput(void);
    To be used with `!!` and `history` features */
 typedef struct Line
 {
-    char *newargv[MAXARGS];
+    //char *newargv[MAXARGS]; //make this a 2d array instead?
+    char newargv[MAXARGS][MAXITEM];
     int wordcount;
     char infile[MAXITEM];
     char outfile[MAXITEM];
@@ -47,11 +48,12 @@ typedef struct Line
     bool redirect_out_err;
     bool background;
     bool error;
+    int newargc;
 } Line;
 
 void historyinit(Line *prev);
 
-void storeline(Line *prev, char **newargv, int wordcount);
+void storeline(Line *prev, char **newargv, int wordcount, int newargc);
 
 void useline(Line *prev, char **newargv, int *wordcount);
 

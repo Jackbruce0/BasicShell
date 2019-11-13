@@ -1,8 +1,8 @@
 /******************************************************************************
  NAME: Jack Bruce
  USERNAME: cssc0013
- PROJECT: CS570 Program 2
- DUE DATE: 10/04/19 
+ PROJECT: CS570 Program 4
+ DUE DATE: 11/29/19 
  INSTRUCTOR: Dr. John Carroll
  FILE: p2.c 
  NOTES: Basic shell that handles commmand execution with input/output
@@ -42,7 +42,13 @@ void sighandler(int signum)
  *****************************************************************************/
 void useline(Line *prev, char **newargv, int *wordcount)
 {
-    *newargv = *prev->newargv;
+
+    int i;
+    for (i = 0; i < prev->newargc; i++)
+    {
+        strcpy(newargv[i], prev->newargv[i]);
+    }       
+    newargv[prev->newargc] = NULL; 
     *wordcount = prev->wordcount;
     *infile = *prev->infile;
     *outfile = *prev->outfile;
@@ -60,10 +66,13 @@ void useline(Line *prev, char **newargv, int *wordcount)
                         from parse  
       output: void 
  *****************************************************************************/
-void storeline(Line *prev, char **newargv, int wordcount)
+void storeline(Line *prev, char **newargv, int wordcount, int newargc)
 {
-    /* I think this is the problem. only one newargv ever */
-    *prev->newargv = *newargv;
+    int i;
+    for (i = 0; i < newargc; i++)
+    {
+        strcpy(prev->newargv[i], newargv[i]);
+    }
     prev->wordcount = wordcount;
     *prev->infile = *infile;
     *prev->outfile = *outfile;
@@ -72,6 +81,7 @@ void storeline(Line *prev, char **newargv, int wordcount)
     prev->redirect_out_err = redirect_out_err;
     prev->background = background;
     prev->error = error;
+    prev->newargc = newargc;
 }
 
 /******************************************************************************
@@ -83,7 +93,7 @@ void storeline(Line *prev, char **newargv, int wordcount)
  *****************************************************************************/
 void historyinit(Line *prev)
 {
-    prev->newargv[0] = NULL;
+    strcpy(prev->newargv[0], "\0");
     prev->wordcount = 0;
     strcpy(prev->infile, " ");
     strcpy(prev->outfile, " ");
@@ -92,6 +102,7 @@ void historyinit(Line *prev)
     prev->redirect_out_err = false;
     prev->background = false;
     prev->error = false;
+    prev->newargc = 0;
 }
 
 /******************************************************************************
@@ -275,13 +286,14 @@ multiple files.\n");
         char cmp[3]; /* string used for command comparison */
         for (i = 1; i < 10; i++) 
         {
-            sprintf(cmp, "!%d", i);
-            if (!strncmp(bang_buf, cmp, 2)) return -10 - i;
+            sprintf(cmp, "!%d", i); /* cmp will = !1 - !9 */
+            if (!strncmp(bang_buf, cmp, 2)) return -10 - i; /* return values
+                                                               specified above */
         }
     }
 
     newargv[newargc] = NULL;
-    storeline(prev, newargv, wordcount);
+    storeline(prev, newargv, wordcount, newargc);
     if (newargv[0] == NULL && wordcount > 0) /* If there is no command */
     {
         fprintf(stderr, "Syntax error: No command given.\n");
@@ -331,17 +343,19 @@ int main(int argc, char **argv)
         sprintf(prompt, "%%%d%% ",com_count + 1);
         printf("%s", prompt);
         /* parse stdin, setting [global] flags as needed */
+
+        /* IMPORTANT: if com_count > 9 we shall pass history[9]
+         * and for !! we will always use history[9] after 10 commands have passed 
+         * NO CHECKS FOR OVERFLOW CURRENTLY IN PLACE */
+
         wordcount = parse(words, newargv, history[com_count]);
         if (wordcount < -10 && wordcount > -20) 
         {
-            printf("%d\n", wordcount);
             int index = abs(wordcount) - 10 - 1; /* -1 for 0-8 indexing */
-            printf("%d\n", index);
-            useline(history[index],newargv, &wordcount); /* for some reason
-                                                            every command is the same :( */
+            useline(history[index],newargv, &wordcount);
 
-                /*Copy this line's pointer to next slot as well to account
-                 * for hole in history table*/
+            /*Copy this line's pointer to next slot as well to account
+             * for hole in history table */
             history[com_count] = history[index];
         }
         else if (wordcount == -2) /* handle !* built-in, use prev line */
@@ -349,18 +363,22 @@ int main(int argc, char **argv)
             if (com_count == 0) /* 1st command ever */
                 useline(history[0], newargv, &wordcount);
             else
+            {
                 useline(history[com_count-1], newargv, &wordcount);
-
                 /*Copy previous pointer to next slot as well to account
                  * for hole in history table*/
                 history[com_count] = history[com_count-1];
+            }
         }
-        else if (wordcount == -1) break;
-        else if (wordcount == 0) {
+        
+        if (wordcount == -1)
+            break;
+        if (wordcount == 0)
             continue; /* reissue prompt if line is empty */
-        }
-        if (error) continue;
-        com_count++; /* com_count is not incremented for empty lines or errors */
+        if (error) 
+            continue;
+        com_count++; /* com_count is not incremented for empty lines or errors 
+                        ask about `!!` on an empty line */
         if (!strcmp("cd", newargv[0])) /* handle cd built-in */
         {
             /* how do we get this in history? */
@@ -379,16 +397,13 @@ int main(int argc, char **argv)
             {
                 fprintf(stderr, "%s: Command not found or failed to execute.\n", 
                     newargv[0]);
+                /* close all open files */
+                if (outfile_fd > 0)
+                    close(outfile_fd);
+                if (infile_fd > 0)
+                    close(infile_fd);
                 exit(errno); /* errno was set in last call to execvp */
             }
-
-            /* close all open files */
-            /* THESE LINES ARE NEVER EXECUTED :) */
-            if (outfile_fd > 0)
-                close(outfile_fd);
-            if (infile_fd > 0)
-                close(infile_fd);
-            
         }
         /* print pid of child if bg process, otherwise wait for child process
            to complete */
