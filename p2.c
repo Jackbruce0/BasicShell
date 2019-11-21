@@ -19,6 +19,7 @@ char outfile[MAXITEM], infile[MAXITEM];
 Line *history[HISTLEN + 1] = { 0 }; /* xtra slot will be used for !! when
                                        # of commands exceeds 10 
                                        THIS DOES NOT NEED TO BE GLOBAL...*/
+int pipe_nx; /* index of newargv where pipe args are stored */
 
 /******************************************************************************
  FUNCTION: signal handler 
@@ -46,6 +47,7 @@ void useline(Line *prev, char **newargv, int *wordcount)
     int i;
     for (i = 0; i < prev->newargc; i++)
     {
+        if (prev->newargv[i] == NULL) newargv[i] = NULL; //not so sure about this
         strcpy(newargv[i], prev->newargv[i]);
     }       
     newargv[prev->newargc] = NULL; 
@@ -71,7 +73,8 @@ void storeline(Line *prev, char **newargv, int wordcount, int newargc)
     int i;
     for (i = 0; i < newargc; i++)
     {
-        strcpy(prev->newargv[i], newargv[i]);
+        if (newargv[i] == NULL) *prev->newargv[i] = NULL; //Some thing is wrong here
+        else strcpy(prev->newargv[i], newargv[i]);
     }
     prev->wordcount = wordcount;
     *prev->infile = *infile;
@@ -197,12 +200,29 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
 {
     char s[STORAGE]; /* buffer for individual word */
     int c = 0;
-    int wordcount = 0, newargc = 0;
+    int wordcount = 0, newargc = 0, pipe_argc = 0;
+    //bool pipe = false; /* flag that a '|' has been read */
     bool bang = false; /* flag for all 2 char commands that begin w/ '!' */
     char bang_buf[3] = "\0"; /* buffer for chars considered for '!' command */
+    char cmp[3]; /* string used for command comparison */
+    int i;
     for(;;)
     {
         c = getword(s);
+        if (!strcmp(s,"|")) {  /*SEG FAULT CITY 
+                                 this is because there are null args going into
+                                 methods that cannot  have null. you need to 
+                                 make a pipe argc or somehting*/
+     //       pipe = true;
+            newargv[newargc] = NULL;
+            pipe_nx = newargc + 1;
+            wordcount++;
+            newargc++; /*new argc isn't really newargc any more and probably has
+                         the same value as wordcount as we keep incrementing it regardless
+                         of a pipe or not. A cleaner solution would not do this and just
+                         use wordcount as an index */
+            continue;
+        }
         if (!strncmp(s, "!", 1) && wordcount == 0 && strlen(s) == 2) {
             bang = true; /* when `!*` is the first word, we will use 
                                 contents of last parse */
@@ -275,15 +295,14 @@ multiple files.\n");
         newargv[newargc] = words[wordcount]; /* populate new argv with
                                                 command and arguments */
         wordcount++;
+        if (pipe_nx != -1) pipe_argc++;
         newargc++;
     }
     fflush(NULL); /* Clear words that weren't parsed  */
-    if (bang) 
+    if (bang) /* On the outside of loop becuase `!` commands are ENTIRE lines */
     {
         /* something about !$ will be in here too i guess */
         if (!strcmp(bang_buf, "!!")) return -2; /* return status for `!*` */
-        int i;
-        char cmp[3]; /* string used for command comparison */
         for (i = 1; i < 10; i++) 
         {
             sprintf(cmp, "!%d", i); /* cmp will = !1 - !9 */
@@ -307,10 +326,12 @@ int main(int argc, char **argv)
     char words[MAXITEM][STORAGE]; /* words collected from stdin */
     char *newargv[MAXARGS]; 
     char prompt[6];
-    int wordcount = 0, execstatus = 0, kidpid, com_count = 0;
+    Line tmp[HISTLEN];
+    int wordcount = 0, execstatus = 0, kidpid, g_kidpid, com_count = 0;
+    int pipe_fd[2];
+    pipe_nx = -1; /* value of -1 indicates no pipe */
     /* initialize next entry in history array */
     /* Will have issues in blank line case */
-    Line tmp[HISTLEN];
     history[com_count] = &tmp[com_count];
     historyinit(history[com_count]);
     /******************************************/
@@ -388,6 +409,23 @@ int main(int argc, char **argv)
         /* flush all open output streams */
         fflush(NULL);
         if ((kidpid = fork()) == 0) {
+            if (pipe_nx != -1) /* Lets lay some pipe! */
+            {
+                pipe(pipe_fd);//check for fail
+                if ((g_kidpid = fork()) == 0)
+                {
+                    /* g_child handles left command and outputs to pipe */
+                    dup2(pipe_fd[1], STDOUT_FILENO);
+                    close(pipe_fd[0]);
+                    close(pipe_fd[1]);
+                    execvp(newargv[0], newargv); //check for fail
+                }
+                dup2(pipe_fd[0], STDIN_FILENO);
+
+                close(pipe_fd[0]);
+                close(pipe_fd[1]);
+                execvp(newargv[pipe_nx], newargv+pipe_nx);//check for fail
+            }
             /* redirect I/O as requested */
             setoutput();
             setinput();
