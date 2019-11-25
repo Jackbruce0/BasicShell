@@ -34,6 +34,28 @@ void sighandler(int signum)
 }
 
 /******************************************************************************
+ FUNCTION: exec failure handler
+ NOTES: Called after exec to check status and perform necessary cleanup upon
+    failure.
+ I/O: input parameters: status of exec call, name of command
+      output: void
+ *****************************************************************************/
+void exec_fail_handler(int status, char *command)
+{
+    if (status == -1) /* exec failure case */
+    {
+        fprintf(stderr, "%s: Command not found or failed to execute.\n", 
+            command);
+        /* close all open files */
+        if (outfile_fd > 0)
+            close(outfile_fd);
+        if (infile_fd > 0)
+            close(infile_fd);
+        exit(errno); /* errno was set in last call to execvp */
+    }
+}
+
+/******************************************************************************
  FUNCTION: use line 
  NOTES: Populates current control values with the previous values stored in 
     Line struct 
@@ -209,11 +231,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
     for(;;)
     {
         c = getword(s);
-        if (!strcmp(s,"|")) {  /*SEG FAULT CITY 
-                                 this is because there are null args going into
-                                 methods that cannot  have null. you need to 
-                                 make a pipe argc or somehting*/
-     //       pipe = true;
+        if (!strcmp(s,"|")) {  
             newargv[newargc] = NULL;
             pipe_nx = newargc + 1;
             wordcount++;
@@ -360,6 +378,7 @@ int main(int argc, char **argv)
         error = false;
         outfile[0] = '\0';
         infile[0] = '\0';
+        pipe_nx = -1;
 
         sprintf(prompt, "%%%d%% ",com_count + 1);
         printf("%s", prompt);
@@ -406,42 +425,41 @@ int main(int argc, char **argv)
             change_directory(newargv);         
             continue;
         }
-        /* flush all open output streams */
+        /* flush all open I/O streams */
         fflush(NULL);
         if ((kidpid = fork()) == 0) {
             if (pipe_nx != -1) /* Lets lay some pipe! */
             {
                 pipe(pipe_fd);//check for fail
+                /* flush all open I/O streams */
+                fflush(NULL);
                 if ((g_kidpid = fork()) == 0)
                 {
-                    /* g_child handles left command and outputs to pipe */
+                    /* g_child handles left command and writes to pipe */
+                    setinput();
                     dup2(pipe_fd[1], STDOUT_FILENO);
                     close(pipe_fd[0]);
                     close(pipe_fd[1]);
-                    execvp(newargv[0], newargv); //check for fail
+                    execstatus = execvp(newargv[0], newargv); 
+                    exec_fail_handler(execstatus, newargv[0]);
+                    printf("Hello.");
                 }
+                /* child handles right command and reads from pipe */
+                setoutput();
                 dup2(pipe_fd[0], STDIN_FILENO);
 
                 close(pipe_fd[0]);
                 close(pipe_fd[1]);
-                execvp(newargv[pipe_nx], newargv+pipe_nx);//check for fail
+                execstatus = execvp(newargv[pipe_nx], newargv+pipe_nx);
+                exec_fail_handler(execstatus, newargv[pipe_nx]);
             }
+
             /* redirect I/O as requested */
             setoutput();
             setinput();
             /* start requested process */
             execstatus = execvp(newargv[0] , newargv);
-            if (execstatus == -1) /* exec failure case */
-            {
-                fprintf(stderr, "%s: Command not found or failed to execute.\n", 
-                    newargv[0]);
-                /* close all open files */
-                if (outfile_fd > 0)
-                    close(outfile_fd);
-                if (infile_fd > 0)
-                    close(infile_fd);
-                exit(errno); /* errno was set in last call to execvp */
-            }
+            exec_fail_handler(execstatus, newargv[0]);
         }
         /* print pid of child if bg process, otherwise wait for child process
            to complete */

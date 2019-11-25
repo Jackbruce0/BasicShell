@@ -27,6 +27,8 @@ typedef enum { false, true } bool;
 
 void sighandler(int signum);
 
+void exec_fail_handler(int status, char *command);
+
 void change_directory(char **newargv);
 
 void setinput(void);
