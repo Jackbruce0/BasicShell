@@ -65,12 +65,16 @@ void exec_fail_handler(int status, char *command)
  *****************************************************************************/
 void useline(Line *prev, char **newargv, int *wordcount)
 {
-
     int i;
     for (i = 0; i < prev->newargc; i++)
     {
-        if (prev->newargv[i] == NULL) newargv[i] = NULL; //not so sure about this
-        strcpy(newargv[i], prev->newargv[i]);
+        /* special case to account for char[][] vs **char */
+        if (!strcmp(prev->newargv[i], "\0")) newargv[i] = NULL; 
+        else 
+        {
+            if (newargv[i] == NULL) newargv[i] = strdup(prev->newargv[i]);
+            else strcpy(newargv[i], prev->newargv[i]); //segfault occurs wehn newargv = null
+        }
     }       
     newargv[prev->newargc] = NULL; 
     *wordcount = prev->wordcount;
@@ -81,6 +85,7 @@ void useline(Line *prev, char **newargv, int *wordcount)
     redirect_out_err = prev->redirect_out_err;
     background = prev->background;
     error = prev->error;
+    pipe_nx = prev->pipe_nx;
 }
 
 /******************************************************************************
@@ -95,7 +100,8 @@ void storeline(Line *prev, char **newargv, int wordcount, int newargc)
     int i;
     for (i = 0; i < newargc; i++)
     {
-        if (newargv[i] == NULL) *prev->newargv[i] = NULL; //Some thing is wrong here
+        /* special case to account for char[][] vs **char */
+        if (newargv[i] == NULL) strcpy(prev->newargv[i], "\0");
         else strcpy(prev->newargv[i], newargv[i]);
     }
     prev->wordcount = wordcount;
@@ -107,6 +113,7 @@ void storeline(Line *prev, char **newargv, int wordcount, int newargc)
     prev->background = background;
     prev->error = error;
     prev->newargc = newargc;
+    prev->pipe_nx = pipe_nx; 
 }
 
 /******************************************************************************
@@ -128,6 +135,7 @@ void historyinit(Line *prev)
     prev->background = false;
     prev->error = false;
     prev->newargc = 0;
+    prev->pipe_nx = -1; /* no pipe by default */
 }
 
 /******************************************************************************
@@ -223,7 +231,6 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
     char s[STORAGE]; /* buffer for individual word */
     int c = 0;
     int wordcount = 0, newargc = 0, pipe_argc = 0;
-    //bool pipe = false; /* flag that a '|' has been read */
     bool bang = false; /* flag for all 2 char commands that begin w/ '!' */
     char bang_buf[3] = "\0"; /* buffer for chars considered for '!' command */
     char cmp[3]; /* string used for command comparison */
@@ -440,16 +447,17 @@ int main(int argc, char **argv)
                     dup2(pipe_fd[1], STDOUT_FILENO);
                     close(pipe_fd[0]);
                     close(pipe_fd[1]);
+                    /* start requested process */
                     execstatus = execvp(newargv[0], newargv); 
                     exec_fail_handler(execstatus, newargv[0]);
-                    printf("Hello.");
                 }
+
                 /* child handles right command and reads from pipe */
                 setoutput();
                 dup2(pipe_fd[0], STDIN_FILENO);
-
                 close(pipe_fd[0]);
                 close(pipe_fd[1]);
+                /* start requested process */
                 execstatus = execvp(newargv[pipe_nx], newargv+pipe_nx);
                 exec_fail_handler(execstatus, newargv[pipe_nx]);
             }

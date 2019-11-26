@@ -40,7 +40,6 @@ void setoutput(void);
    To be used with `!!` and `history` features */
 typedef struct Line
 {
-    //char *newargv[MAXARGS]; //make this a 2d array instead?
     char newargv[MAXARGS][MAXITEM];
     int wordcount;
     char infile[MAXITEM];
@@ -51,6 +50,7 @@ typedef struct Line
     bool background;
     bool error;
     int newargc;
+    int pipe_nx;
 } Line;
 
 void historyinit(Line *prev);
