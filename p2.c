@@ -270,7 +270,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev, int com_count)
             while ((c = getword(s)) != 0);
         }
 
-        if (!strcmp(s,"|")) {  
+        if (!strcmp(s,"|") && real_pipe) {  
             newargv[newargc] = NULL;
             pipe_nx = newargc + 1;
             wordcount++;

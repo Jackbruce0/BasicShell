@@ -25,6 +25,8 @@
 
 typedef enum { false, true } bool;
 
+extern bool real_pipe;
+
 void sighandler(int signum);
 
 void exec_fail_handler(int status, char *command);

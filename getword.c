@@ -14,6 +14,9 @@
  *****************************************************************************/
 
 #include "getword.h"
+#include "p2.h"
+
+bool real_pipe;
 
 /******************************************************************************
  FUNCTION: getword
@@ -46,11 +49,18 @@ int getword(char *w)
     int c; /* storage for each char from stdin. type int b/c getchar() returns
               type int */ 
     int escape = 0; // boolean control variable for character escape
+    real_pipe = true;
     for(;;) //loop through stdin (char wise) and store each valid value in w
     {
         c = getchar();
         w[size] = c;
-        
+       
+        /* Special case for distinguishing '|' from '\|' in p2.c */
+        if (c == '|' && escape)
+        {
+            real_pipe = false;
+        }
+
         if (strchr(meta, c) != NULL && !escape) /* meta character ends word 
                                                    collection (unless preceded
                                                    by '\') */
