@@ -28,7 +28,7 @@
             value of 0 denote the parsing of a full line of input.
     - word "done" collected -> -1 ("done" in buffer)
     - metacharacters end word and are also words in themselves
-        - "<", ">", ">&", ">>", ">>&", "|", "#", and "&"
+        - "<", ">", ">&", ">>", ">>&", "|", and "&"
     - '\' is a charachter escape. If '\' precedes a space or metacharacter the
       word is not ended and '\' is not stored in buffer
     - all other words -> # of chars (word collected in buffer)
@@ -39,7 +39,9 @@
  *****************************************************************************/
 int getword(char *w) 
 {
-    char meta[] = {'<', '>', '|', '#', '&'}; //all single char meta characters
+    /* taking meta characters out breaks program (hence the duplicate '&')
+       I HAVE NO IDEA WHAT THE PROBLEM IS. meta MUST have 5 chars in it*/
+    char meta[] = {'<', '>', '|', '&', '&'}; //all single char meta characters
     int size = 0;
     int c; /* storage for each char from stdin. type int b/c getchar() returns
               type int */ 
