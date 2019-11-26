@@ -446,7 +446,8 @@ int main(int argc, char **argv)
         pipe_nx = -1;
 
         sprintf(prompt, "%%%d%% ",com_count + 1);
-        printf("%s", prompt);
+        if (!script) printf("%s", prompt); /* Do no print prompt during script
+                                              execution */
         /* parse stdin, setting [global] flags as needed */
 
         /* IMPORTANT: if com_count > 9 we shall pass history[9]
@@ -548,7 +549,8 @@ int main(int argc, char **argv)
     /* Terminate any children that are still running.
        Last 3 lines are used from program2 instructions verbatim */
     killpg(getpgrp(), SIGTERM);
-    printf("p2 terminated.\n");
+    if (!script) printf("p2 terminated.\n"); /* Do not print message after 
+                                                script execution */
     exit(0);
     /*************/
 
