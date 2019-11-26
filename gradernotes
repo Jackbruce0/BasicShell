@@ -34,6 +34,7 @@ Design Decisions:
             + the use of a struct will make my life much easier when 
               implementing `history` in p4
          - handled error exit codes with errno variable
+         - I used strdup for history and you said it was okay in an email
 
 Known Deficiencies:
          - when a background process has printed output, it will print after the

@@ -47,6 +47,8 @@ typedef struct Line
     bool redirect_out;
     bool redirect_in;
     bool redirect_out_err;
+    bool append_out;
+    bool append_err;
     bool background;
     bool error;
     int newargc;

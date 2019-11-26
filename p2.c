@@ -13,7 +13,8 @@
 
 #include "p2.h"
 
-bool redirect_out, redirect_in, redirect_out_err, background, error;
+bool redirect_out, redirect_in, redirect_out_err, append_out, append_err,
+    background, error;
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
 Line *history[HISTLEN + 1] = { 0 }; /* xtra slot will be used for !! when
@@ -83,6 +84,8 @@ void useline(Line *prev, char **newargv, int *wordcount)
     redirect_out = prev->redirect_out;
     redirect_in = prev->redirect_in;
     redirect_out_err = prev->redirect_out_err;
+    append_out = prev->append_out;
+    append_err = prev->append_err;
     background = prev->background;
     error = prev->error;
     pipe_nx = prev->pipe_nx;
@@ -110,6 +113,8 @@ void storeline(Line *prev, char **newargv, int wordcount, int newargc)
     prev->redirect_out = redirect_out;
     prev->redirect_in = redirect_in; 
     prev->redirect_out_err = redirect_out_err;
+    prev->append_out = append_out;
+    prev->append_err = append_err;
     prev->background = background;
     prev->error = error;
     prev->newargc = newargc;
@@ -132,6 +137,8 @@ void historyinit(Line *prev)
     prev->redirect_out = false;
     prev->redirect_in = false;
     prev->redirect_out_err = false;
+    prev->append_out = false;
+    prev->append_err = false;
     prev->background = false;
     prev->error = false;
     prev->newargc = 0;
@@ -193,12 +200,28 @@ void setinput(void)
  *****************************************************************************/
 void setoutput(void)
 {
-    if (redirect_out | redirect_out_err)
+    if (append_out | append_err)
+    {
+        int outflags = O_WRONLY | O_APPEND;
+        if ((outfile_fd = open(outfile, outflags, S_IRUSR | S_IWUSR)) < 0)
+        {
+            /* File MUST exist previously to be written to */
+            if (outfile[0] == '\0') fprintf(stderr, "Missing name for redirect\n");
+            else fprintf(stderr, "%s: file does no exist.\n", outfile);
+            dup2(open("/dev/null", O_WRONLY), STDOUT_FILENO);
+            error = true;
+        }
+        else
+            dup2(outfile_fd, STDOUT_FILENO); 
+        if (append_err) 
+            dup2(outfile_fd, STDERR_FILENO);
+    }
+    else if (redirect_out | redirect_out_err)
     {
         int outflags = O_WRONLY | O_CREAT | O_EXCL;
         if ((outfile_fd = open(outfile, outflags, S_IRUSR | S_IWUSR)) < 0)
         {
-            /* File cannot exist previously to be written to
+            /* File CANNOT exist previously to be written to
                (no clobber implementation) */
             if (outfile[0] == '\0') fprintf(stderr, "Missing name for redirect\n");
             else fprintf(stderr, "%s: file exists.\n", outfile);
@@ -275,11 +298,26 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
             break;
         }
         
-        /* output redirect preparation */
-        if(!strcmp(s, ">") || !strcmp(s, ">&"))
+        /* APPENDING output redirect prepation */
+        if (!strcmp(s, ">>") || !strcmp(s, ">>&"))
         {
-            if (redirect_out || redirect_out_err) /* cannot have multiple '>' 
-                                                     or '>&' in one statement */
+            /* Cannont redirect ouptut to mnultiple places */
+            if (redirect_out || redirect_out_err || append_out || append_err) 
+            {
+                fprintf(stderr, "Syntax error: Cannot redirect output to \
+multiple files.\n");
+                error = true;
+            }
+            else if (!strcmp(s, ">>")) append_out = true;
+            else append_err = true;
+            wordcount++;
+            continue;
+        }
+        /* output redirect preparation */
+        else if (!strcmp(s, ">") || !strcmp(s, ">&"))
+        {
+            /* Cannont redirect ouptut to mnultiple places */
+            if (redirect_out || redirect_out_err ||append_out || append_err) 
             {
                 fprintf(stderr, "Syntax error: Cannot redirect output to \
 multiple files.\n");
@@ -292,7 +330,9 @@ multiple files.\n");
         }
         /* any word following '>' or '>&' will be accepted as a file name */
         if (redirect_out && !strcmp(words[wordcount-1], ">")
-            || redirect_out_err && !strcmp(words[wordcount-1], ">&"))
+            || redirect_out_err && !strcmp(words[wordcount-1], ">&")
+            || append_out && !strcmp(words[wordcount-1], ">>")
+            || append_err && !strcmp(words[wordcount-1], ">>&"))
         {
             strcpy(outfile, words[wordcount++]);
             continue;
@@ -381,6 +421,8 @@ int main(int argc, char **argv)
         redirect_out = false;
         redirect_in = false;
         redirect_out_err = false;
+        append_out = false;
+        append_err = false;
         background = false;
         error = false;
         outfile[0] = '\0';
