@@ -21,6 +21,7 @@ Line *history[HISTLEN + 1] = { 0 }; /* xtra slot will be used for !! when
                                        # of commands exceeds 10 
                                        THIS DOES NOT NEED TO BE GLOBAL...*/
 int pipe_nx; /* index of newargv where pipe args are stored */
+bool script; /* flag for using a a file as shel input */
 
 /******************************************************************************
  FUNCTION: signal handler 
@@ -263,6 +264,12 @@ int parse(char words[][STORAGE], char **newargv, Line *prev, int com_count)
     for(;;)
     {
         c = getword(s);
+        
+        /* Comment handler -> ignores all words in between '#' and '\n' */
+        if (script && !strcmp(s, "#") && c == 1) {
+            while ((c = getword(s)) != 0);
+        }
+
         if (!strcmp(s,"|")) {  
             newargv[newargc] = NULL;
             pipe_nx = newargc + 1;
@@ -401,6 +408,7 @@ int main(int argc, char **argv)
     Line tmp[HISTLEN];
     int wordcount = 0, execstatus = 0, kidpid, g_kidpid, com_count = 0;
     int pipe_fd[2];
+    script = false;
     pipe_nx = -1; /* value of -1 indicates no pipe */
     /* initialize next entry in history array */
     /* Will have issues in blank line case */
@@ -416,6 +424,7 @@ int main(int argc, char **argv)
     {
         int inflags = O_RDONLY;
         int commands_fd = -1;
+        script = true;
         if ((commands_fd = open(argv[1], inflags)) < 0)
         {
             fprintf(stderr, "%s: %s\n", argv[1], strerror(errno));
