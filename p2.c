@@ -119,6 +119,7 @@ void storeline(Line *prev, char **newargv, int wordcount, int newargc)
     prev->error = error;
     prev->newargc = newargc;
     prev->pipe_nx = pipe_nx; 
+    strcpy(prev->lastword, newargv[newargc - 1]);
 }
 
 /******************************************************************************
@@ -143,6 +144,7 @@ void historyinit(Line *prev)
     prev->error = false;
     prev->newargc = 0;
     prev->pipe_nx = -1; /* no pipe by default */
+    strcpy(prev->lastword, "\0");
 }
 
 /******************************************************************************
@@ -249,7 +251,7 @@ void setoutput(void)
                         ptr to newargv array, ptr to struct for previous line 
       output: # of words read or exit code from above
  *****************************************************************************/
-int parse(char words[][STORAGE], char **newargv, Line *prev)
+int parse(char words[][STORAGE], char **newargv, Line *prev, int com_count)
 {
     char s[STORAGE]; /* buffer for individual word */
     int c = 0;
@@ -271,7 +273,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev)
                          use wordcount as an index */
             continue;
         }
-        if (!strncmp(s, "!", 1) && wordcount == 0 && strlen(s) == 2) {
+        if (!strncmp(s, "!", 1) && wordcount == 0 && strlen(s) == 2 && strncmp(s, "!$", 2)) {
             bang = true; /* when `!*` is the first word, we will use 
                                 contents of last parse */
             strncpy(bang_buf, s, 3);
@@ -357,8 +359,13 @@ multiple files.\n");
             continue;
         }
         /******************************/ 
-        newargv[newargc] = words[wordcount]; /* populate new argv with
-                                                command and arguments */
+        /* if "!$" is present, replace current word with last word
+           of previous command */
+        if (!strncmp(words[wordcount], "!$", 2)) 
+            strcpy(newargv[newargc], history[com_count - 1]->lastword);
+        else 
+            newargv[newargc] = words[wordcount]; /* populate new argv with
+                                                    command and arguments */
         wordcount++;
         if (pipe_nx != -1) pipe_argc++;
         newargc++;
@@ -437,7 +444,7 @@ int main(int argc, char **argv)
          * and for !! we will always use history[9] after 10 commands have passed 
          * NO CHECKS FOR OVERFLOW CURRENTLY IN PLACE */
 
-        wordcount = parse(words, newargv, history[com_count]);
+        wordcount = parse(words, newargv, history[com_count], com_count);
         if (wordcount < -10 && wordcount > -20) 
         {
             int index = abs(wordcount) - 10 - 1; /* -1 for 0-8 indexing */

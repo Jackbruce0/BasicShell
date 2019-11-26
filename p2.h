@@ -53,6 +53,7 @@ typedef struct Line
     bool error;
     int newargc;
     int pipe_nx;
+    char lastword[MAXITEM];
 } Line;
 
 void historyinit(Line *prev);
@@ -61,5 +62,5 @@ void storeline(Line *prev, char **newargv, int wordcount, int newargc);
 
 void useline(Line *prev, char **newargv, int *wordcount);
 
-int parse(char w[][STORAGE], char **newargv, Line *prev);
+int parse(char w[][STORAGE], char **newargv, Line *prev, int com_count);
 /*******************************[ EOF: p2.h ]*********************************/
