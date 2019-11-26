@@ -96,7 +96,7 @@ void useline(Line *prev, char **newargv, int *wordcount)
  NOTES: Populates Line struct with current line's values
  I/O: input parameters: Line *prev for storage, and necessary values gathered
                         from parse  
-      output: void 
+      output: void  
  *****************************************************************************/
 void storeline(Line *prev, char **newargv, int wordcount, int newargc)
 {
