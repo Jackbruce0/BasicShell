@@ -185,10 +185,11 @@ void setinput(void)
         if ((infile_fd = open(infile, inflags)) < 0)
         {
             /* File must exist in order to be read as input */
-            if (infile[0] == '\0') fprintf(stderr, "Missing name for redirect\n");
+            if (infile[0] == '\0') fprintf(stderr, "Missing name for redirect.\n");
             else fprintf(stderr, "%s: No such file or directory.\n", infile);
             dup2(open("/dev/null", O_RDONLY), STDIN_FILENO);
             error = true;
+            exit(-1);
         }
     }
     if (redirect_in && infile_fd > 0)
@@ -213,10 +214,11 @@ void setoutput(void)
         if ((outfile_fd = open(outfile, outflags, S_IRUSR | S_IWUSR)) < 0)
         {
             /* File MUST exist previously to be written to */
-            if (outfile[0] == '\0') fprintf(stderr, "Missing name for redirect\n");
-            else fprintf(stderr, "%s: file does no exist.\n", outfile);
+            if (outfile[0] == '\0') fprintf(stderr, "Missing name for redirect.\n");
+            else fprintf(stderr, "%s: file does not exist.\n", outfile);
             dup2(open("/dev/null", O_WRONLY), STDOUT_FILENO);
             error = true;
+            exit(-1); /* Do not execute command if open fails */
         }
         else
             dup2(outfile_fd, STDOUT_FILENO); 
@@ -230,10 +232,11 @@ void setoutput(void)
         {
             /* File CANNOT exist previously to be written to
                (no clobber implementation) */
-            if (outfile[0] == '\0') fprintf(stderr, "Missing name for redirect\n");
+            if (outfile[0] == '\0') fprintf(stderr, "Missing name for redirect.\n");
             else fprintf(stderr, "%s: file exists.\n", outfile);
             dup2(open("/dev/null", O_WRONLY), STDOUT_FILENO);
             error = true;
+            exit(-1); /* Do not execute command if open fails */
         }
         else
             dup2(outfile_fd, STDOUT_FILENO); 
@@ -389,8 +392,15 @@ multiple files.\n");
         for (i = 1; i < 10; i++) 
         {
             sprintf(cmp, "!%d", i); /* cmp will = !1 - !9 */
-            if (!strncmp(bang_buf, cmp, 2)) return -10 - i; /* return values
-                                                               specified above */
+            if (!strncmp(bang_buf, cmp, 2)) {
+                /* Check history request is not out of range */
+                if (i > com_count) {
+                    fprintf(stderr, "%d: Event not found.\n", i);
+                    error = true;
+                    return wordcount;
+                }
+                else return -10 - i; /* return values specified above */
+            }
         }
     }
 
