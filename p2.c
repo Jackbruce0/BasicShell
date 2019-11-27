@@ -149,7 +149,7 @@ void historyinit(Line *prev)
     prev->error = false;
     prev->newargc = 0;
     prev->pipe_nx = -1; /* no pipe by default */
-    strcpy(prev->lastword, "\0");
+    strcpy(prev->lastword, " ");
 }
 
 /******************************************************************************
@@ -291,6 +291,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev, int com_count)
                           of arguments (not just left hand side of pipe) */
             continue;
         }
+
         if (!strncmp(s, "!", 1) && wordcount == 0 && strlen(s) == 2 
             && strncmp(s, "!$", 2)) {
             bang = true; /* when `!*` is the first word, we will use the 
@@ -300,6 +301,19 @@ int parse(char words[][STORAGE], char **newargv, Line *prev, int com_count)
         if (bang && c > 0) continue; /* do not collect trailing words when 
                                         `!*` was encountered */
         if (!bang) strcpy(words[wordcount], s);
+
+        /* '!$ handler -> replace current word with last word of previous command */
+        if (!strncmp(words[wordcount], "!$", 2)) {
+            if (com_count > 0) 
+                strcpy(words[wordcount], history[com_count - 1]->lastword);
+            else {
+                /* ERROR when !$ is called when no last command */
+                fprintf(stderr, "$: Event not found.\n");
+                error = true;
+                wordcount--; 
+            }
+        }
+
         if (c == 0) /* \n collected */
         { 
             /* check for last word collected being '&' */
@@ -378,13 +392,9 @@ multiple files.\n");
             continue;
         }
         /******************************/ 
-        /* if "!$" is present, replace current word with last word
-           of previous command */
-        if (!strncmp(words[wordcount], "!$", 2)) 
-            strcpy(newargv[newargc], history[com_count - 1]->lastword);
-        else 
-            newargv[newargc] = words[wordcount]; /* populate new argv with
-                                                    command and arguments */
+        
+        newargv[newargc] = words[wordcount]; /* populate new argv with
+                                                command and arguments */
         wordcount++;
         if (pipe_nx != -1) pipe_argc++;
         newargc++;
@@ -392,7 +402,6 @@ multiple files.\n");
     fflush(NULL); /* Clear words that weren't parsed  */
     if (bang) /* On the outside of loop becuase `!` commands are ENTIRE lines */
     {
-        /* something about !$ will be in here too i guess */
         if (!strcmp(bang_buf, "!!")) return -2; /* return status for `!*` */
         for (i = 1; i < 10; i++) 
         {
