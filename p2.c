@@ -99,7 +99,8 @@ void useline(Line *prev, char **newargv, int *wordcount)
                         from parse  
       output: void  
  *****************************************************************************/
-void storeline(Line *prev, char **newargv, int wordcount, int newargc)
+void storeline(Line *prev, char **newargv, int wordcount, int newargc, 
+    char* lastword)
 {
     int i;
     for (i = 0; i < newargc; i++)
@@ -120,7 +121,7 @@ void storeline(Line *prev, char **newargv, int wordcount, int newargc)
     prev->error = error;
     prev->newargc = newargc;
     prev->pipe_nx = pipe_nx; 
-    strcpy(prev->lastword, newargv[newargc - 1]);
+    strcpy(prev->lastword, lastword);
 }
 
 /******************************************************************************
@@ -255,6 +256,7 @@ void setoutput(void)
               our history table for the command to be executed
         -2 -> !! (repeat last command)
         -1 -> done (exit shell)
+    - All statements that cause errors in parse ARE NOT stored in history
  I/O: input parameters: 2d char array for storage of the collected words
                         ptr to newargv array, ptr to struct for previous line 
       output: # of words read or exit code from above
@@ -405,12 +407,14 @@ multiple files.\n");
     }
 
     newargv[newargc] = NULL;
-    storeline(prev, newargv, wordcount, newargc);
+    if (newargc == 0) error = true;
     if (newargv[0] == NULL && wordcount > 0) /* If there is no command */
     {
         fprintf(stderr, "Syntax error: No command given.\n");
         error = true;
+        return wordcount;
     }
+    storeline(prev, newargv, wordcount, newargc, words[wordcount-1]);
     return wordcount;
 } /* End function parse */
 

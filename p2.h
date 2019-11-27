@@ -60,7 +60,8 @@ typedef struct Line
 
 void historyinit(Line *prev);
 
-void storeline(Line *prev, char **newargv, int wordcount, int newargc);
+void storeline(Line *prev, char **newargv, int wordcount, int newargc,
+    char* lastword);
 
 void useline(Line *prev, char **newargv, int *wordcount);
 
