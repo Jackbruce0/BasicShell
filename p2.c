@@ -150,7 +150,7 @@ void historyinit(Line *prev)
 
 /******************************************************************************
  FUNCTION: change directory 
- NOTES: Uses chdir system with input gathered from parse(). Checks for
+ NOTES: Uses chdir sys call with input gathered from parse(). Checks for
     too many arguments error. Uses $HOME as path if no arguments supplied. 
  I/O: input parameters: newargv populated by parse() 
       output: void 
@@ -164,7 +164,11 @@ void change_directory(char **newargv)
     }
     if (newargv[1] == NULL)
         chdir(getenv("HOME"));
-    chdir(newargv[1]);
+    else { 
+        if (chdir(newargv[1]) != 0) {
+            fprintf(stderr, "%s: %s\n", newargv[1], strerror(errno));
+        }
+    }
 } /* End function change directory */
 
 /******************************************************************************
@@ -487,8 +491,10 @@ int main(int argc, char **argv)
                         ask about `!!` on an empty line */
         if (!strcmp("cd", newargv[0])) /* handle cd built-in */
         {
-            /* how do we get this in history? */
             change_directory(newargv);         
+            /* Initialize next entry in history */
+            history[com_count] = &tmp[com_count];
+            historyinit(history[com_count]);
             continue;
         }
         /* flush all open I/O streams */
