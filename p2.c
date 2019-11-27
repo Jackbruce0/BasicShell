@@ -6,8 +6,9 @@
  INSTRUCTOR: Dr. John Carroll
  FILE: p2.c 
  NOTES: Basic shell that handles commmand execution with input/output
-    redirection, cd (change directory), and running processes in the
-    background. Uses getword function from getword.c for parsing.
+    redirection, cd (change directory), running processes in the
+    background, piping 2 processes together, and history. Uses getword function 
+    from getword.c for parsing.
  SOURCES: See ~/Two/gradernotes
  *****************************************************************************/
 
@@ -44,7 +45,7 @@ void sighandler(int signum)
  *****************************************************************************/
 void exec_fail_handler(int status, char *command)
 {
-    if (status == -1) /* exec failure case */
+    if (status != 0) /* exec failure case */
     {
         fprintf(stderr, "%s: Command not found or failed to execute.\n", 
             command);
@@ -74,8 +75,10 @@ void useline(Line *prev, char **newargv, int *wordcount)
         if (!strcmp(prev->newargv[i], "\0")) newargv[i] = NULL; 
         else 
         {
+            /* strdup is used to reallocate space for args tat were previously
+               NULL. You gave me permissin to use strdup here via email */
             if (newargv[i] == NULL) newargv[i] = strdup(prev->newargv[i]);
-            else strcpy(newargv[i], prev->newargv[i]); //segfault occurs wehn newargv = null
+            else strcpy(newargv[i], prev->newargv[i]); 
         }
     }       
     newargv[prev->newargc] = NULL; 
@@ -190,7 +193,7 @@ void setinput(void)
             else fprintf(stderr, "%s: No such file or directory.\n", infile);
             dup2(open("/dev/null", O_RDONLY), STDIN_FILENO);
             error = true;
-            exit(-1);
+            exit(-1); /* Do not execute command if open fails */
         }
     }
     if (redirect_in && infile_fd > 0)
@@ -256,7 +259,8 @@ void setoutput(void)
               our history table for the command to be executed
         -2 -> !! (repeat last command)
         -1 -> done (exit shell)
-    - All statements that cause errors in parse ARE NOT stored in history
+    - All statements that cause errors in parse ARE NOT stored in history and 
+      therefore DO NOT increment prompt count they cannot be accessed again
  I/O: input parameters: 2d char array for storage of the collected words
                         ptr to newargv array, ptr to struct for previous line 
       output: # of words read or exit code from above
@@ -283,19 +287,18 @@ int parse(char words[][STORAGE], char **newargv, Line *prev, int com_count)
             newargv[newargc] = NULL;
             pipe_nx = newargc + 1;
             wordcount++;
-            newargc++; /*new argc isn't really newargc any more and probably has
-                         the same value as wordcount as we keep incrementing it regardless
-                         of a pipe or not. A cleaner solution would not do this and just
-                         use wordcount as an index */
+            newargc++; /* when pipe is present newargc becomes the total count
+                          of arguments (not just left hand side of pipe) */
             continue;
         }
-        if (!strncmp(s, "!", 1) && wordcount == 0 && strlen(s) == 2 && strncmp(s, "!$", 2)) {
-            bang = true; /* when `!*` is the first word, we will use 
-                                contents of last parse */
+        if (!strncmp(s, "!", 1) && wordcount == 0 && strlen(s) == 2 
+            && strncmp(s, "!$", 2)) {
+            bang = true; /* when `!*` is the first word, we will use the 
+                            contents of a previous parse */
             strncpy(bang_buf, s, 3);
         }
         if (bang && c > 0) continue; /* do not collect trailing words when 
-                                            `!*` was encountered */
+                                        `!*` was encountered */
         if (!bang) strcpy(words[wordcount], s);
         if (c == 0) /* \n collected */
         { 
