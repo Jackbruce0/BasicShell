@@ -286,7 +286,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev, int com_count)
         if (!strcmp(s,"|") && real_pipe) {  
             newargv[newargc] = NULL;
             pipe_nx = newargc + 1;
-            wordcount++;
+            strcpy(words[wordcount++], s);
             newargc++; /* when pipe is present newargc becomes the total count
                           of arguments (not just left hand side of pipe) */
             continue;
@@ -317,6 +317,7 @@ int parse(char words[][STORAGE], char **newargv, Line *prev, int com_count)
         if (c == 0) /* \n collected */
         { 
             /* check for last word collected being '&' */
+            if (newargv[newargc - 1] == NULL) break;
             if (newargc > 0 && !strcmp(newargv[newargc - 1], "&"))
             {
                 background = true;
@@ -420,7 +421,7 @@ multiple files.\n");
 
     newargv[newargc] = NULL;
     if (newargc == 0) error = true;
-    if (newargv[0] == NULL && wordcount > 0) /* If there is no command */
+    if (newargv[0] == NULL && wordcount > 0 || newargv[pipe_nx] == NULL) /* If there is no command */
     {
         fprintf(stderr, "Syntax error: No command given.\n");
         error = true;
