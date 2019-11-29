@@ -19,8 +19,7 @@ bool redirect_out, redirect_in, redirect_out_err, append_out, append_err,
 int outfile_fd, infile_fd;
 char outfile[MAXITEM], infile[MAXITEM];
 Line *history[HISTLEN + 1] = { 0 }; /* xtra slot will be used for !! when
-                                       # of commands exceeds 10 
-                                       THIS DOES NOT NEED TO BE GLOBAL...*/
+                                       # of commands exceeds 10 */
 int pipe_nx; /* index of newargv where pipe args are stored */
 bool script; /* flag for using a a file as shel input */
 
@@ -421,8 +420,8 @@ multiple files.\n");
 
     newargv[newargc] = NULL;
     if (newargc == 0) error = true;
-    /* No checks for empty side of pipe */
     /* If there is no command */
+    /* No checks for empty right hand side of pipe */
     if (newargv[0] == NULL && wordcount > 0) 
     {
         fprintf(stderr, "Syntax error: No command given.\n");
@@ -482,12 +481,8 @@ int main(int argc, char **argv)
         if (!script) printf("%s", prompt); /* Do no print prompt during script
                                               execution */
         /* parse stdin, setting [global] flags as needed */
-
-        /* IMPORTANT: if com_count > 9 we shall pass history[9]
-         * and for !! we will always use history[9] after 10 commands have passed 
-         * NO CHECKS FOR OVERFLOW CURRENTLY IN PLACE */
-
         wordcount = parse(words, newargv, history[com_count], com_count);
+        /* history handler '![0-9]' */
         if (wordcount < -10 && wordcount > -20) 
         {
             int index = abs(wordcount) - 10 - 1; /* -1 for 0-8 indexing */
@@ -497,15 +492,15 @@ int main(int argc, char **argv)
              * for hole in history table */
             history[com_count] = history[index];
         }
-        else if (wordcount == -2) /* handle !* built-in, use prev line */
+        else if (wordcount == -2) /* handle !! built-in, use prev line */
         {
             if (com_count == 0) /* 1st command ever */
-                useline(history[0], newargv, &wordcount);
+                useline(history[0], newargv, &wordcount); /* use empty line */
             else
             {
                 useline(history[com_count-1], newargv, &wordcount);
-                /*Copy previous pointer to next slot as well to account
-                 * for hole in history table*/
+                /* Copy previous pointer to next slot as well to account
+                   for hole in history table */
                 history[com_count] = history[com_count-1];
             }
         }
@@ -529,16 +524,17 @@ int main(int argc, char **argv)
         /* flush all open I/O streams */
         fflush(NULL);
         if ((kidpid = fork()) == 0) {
-            if (pipe_nx != -1) /* Lets lay some pipe! */
+            /* pipeline block */
+            if (pipe_nx != -1) 
             {
-                pipe(pipe_fd);//check for fail
+                pipe(pipe_fd);
                 /* flush all open I/O streams */
                 fflush(NULL);
                 if ((g_kidpid = fork()) == 0)
                 {
                     /* g_child handles left command and writes to pipe */
                     setinput();
-                    dup2(pipe_fd[1], STDOUT_FILENO);
+                    dup2(pipe_fd[1], STDOUT_FILENO); /* write to pipe */
                     close(pipe_fd[0]);
                     close(pipe_fd[1]);
                     /* start requested process */
@@ -548,7 +544,7 @@ int main(int argc, char **argv)
 
                 /* child handles right command and reads from pipe */
                 setoutput();
-                dup2(pipe_fd[0], STDIN_FILENO);
+                dup2(pipe_fd[0], STDIN_FILENO); /* read from pipe */
                 close(pipe_fd[0]);
                 close(pipe_fd[1]);
                 /* start requested process */

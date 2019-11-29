@@ -1,6 +1,9 @@
 I wrote this code myself, but gained some inspiration from several sources.
 
-Sources: - getword method was adapted from Foster's getchar example in inout2.c
+Sources: - I learned a lot of the mechanics for verical piping from this
+           example
+           + www.cs.usfca.edu/~sjengle/ucdavis/ecs150-w04/source/pipe.c
+         - getword method was adapted from Foster's getchar example in inout2.c
            found in ~masc0000/CbyDiscovery/ch2/inout2.c
          - syntax and usage of execvp commmand was learned from exec1.c found
            in ~cs570/exec1.c
@@ -25,22 +28,33 @@ Sources: - getword method was adapted from Foster's getchar example in inout2.c
            and killpg
 
 Design Decisions:
-         - `[command] [>|<|>&] &` will write/read from/to a file named '&' if it
-           meets standards for a valid file
+         - 'echo hi > a >> b' will fail as a command cannot write to 2 
+           different places at once
+         - If a a set of 2 piped commands is backgrounded. name and PID of
+           left hand command will be reported
+           + ex) `ls | cat &` will report "ls [PID]"
+         - I used 'strdup' in the implementation of my history feature. 
+            + You gave me permission to use this method via email as I only use 
+              it to overwrite char pointers that I assigned to NULL. 
+         - `[command] [>|<|>&|>>|>>&] &` will write/read to/from a file named
+           '&' if it meets standards for a valid file
             + as opposed to putting the command in the background with a 
               redirect pointing to an empty file
-         - for `!!` I implemented a struct that saves the state of p2 and will
-           load that previous state when `!!` is encountered
-            + the use of a struct will make my life much easier when 
-              implementing `history` in p4
+         - For history (`!!`, `![0-9]`, and `!$`) I used an array of structs 
+           that save the state of p2 during the time that a previous command
+           was executed.
+            + When previous command is requested we simply load in respective
+              index of history array
          - handled error exit codes with errno variable
-         - I used strdup for history and you said it was okay in an email
-
+         - now that we must handle pipelines, I increased newargv's size to
+           2*MAXARGS (40). As new projected maximum is theoretically double
+           what I expected for a single command
 Known Deficiencies:
+         - If second argument of pipe is empty, no error is detected
+            + ex) `sort | &` will simply run 'sort' in the background (as if
+                  the pipe was not even there
          - when a background process has printed output, it will print after the
            parent issued the prompt and the parent will not issue another
            prompt on a seperate line like tcsh does
             + performance is not hindered, shell is still activitely waiting
               for input
-         - `make splint` prints unrecognized identifier warning for killpg. I
-            could not figure out how to make this go away

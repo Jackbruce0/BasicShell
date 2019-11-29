@@ -42,14 +42,13 @@ bool real_pipe;
  *****************************************************************************/
 int getword(char *w) 
 {
-    /* taking meta characters out breaks program (hence the duplicate '&')
-       I HAVE NO IDEA WHAT THE PROBLEM IS. meta MUST have 5 chars in it*/
+    /* taking meta characters out breaks program (hence the duplicate '&') */
     char meta[] = {'<', '>', '|', '&', '&'}; //all single char meta characters
     int size = 0;
     int c; /* storage for each char from stdin. type int b/c getchar() returns
               type int */ 
     int escape = 0; // boolean control variable for character escape
-    real_pipe = true;
+    real_pipe = true; /* Global flag so parse() can distinguish '|' fomr '\|' */
     for(;;) //loop through stdin (char wise) and store each valid value in w
     {
         c = getchar();
