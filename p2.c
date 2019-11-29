@@ -421,7 +421,9 @@ multiple files.\n");
 
     newargv[newargc] = NULL;
     if (newargc == 0) error = true;
-    if (newargv[0] == NULL && wordcount > 0 || newargv[pipe_nx] == NULL) /* If there is no command */
+    /* No checks for empty side of pipe */
+    /* If there is no command */
+    if (newargv[0] == NULL && wordcount > 0) 
     {
         fprintf(stderr, "Syntax error: No command given.\n");
         error = true;
